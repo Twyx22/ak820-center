@@ -1,0 +1,8 @@
+# AJAZZ AK820 Pro — user access to the HID interfaces (hidraw).
+# Wired PIDs from the official driver's config.xml: 8009 and 800A.
+KERNEL=="hidraw*", ATTRS{idVendor}=="0c45", ATTRS{idProduct}=="8009", MODE="0660", GROUP="input", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="0c45", ATTRS{idProduct}=="800a", MODE="0660", GROUP="input", TAG+="uaccess"
+# 2.4G dongle (vendor interface — not used by AK820 Center yet)
+KERNEL=="hidraw*", ATTRS{idVendor}=="0c45", ATTRS{idProduct}=="fdfd", MODE="0660", GROUP="input", TAG+="uaccess"
+# Bluetooth mode
+KERNEL=="hidraw*", ATTRS{idVendor}=="0c45", ATTRS{idProduct}=="fefe", MODE="0660", GROUP="input", TAG+="uaccess"
