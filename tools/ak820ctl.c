@@ -1,6 +1,7 @@
 /*
- * ak820ctl — outil CLI de test/contrôle du protocole « legacy » AJAZZ AK820 Pro
- * issu de la décompilation de DeviceDriver.exe 1.0.0.5 (voir ../PROTOCOL.md).
+ * ak820ctl — CLI test/control tool for the AJAZZ AK820 Pro "legacy" protocol
+ * recovered by decompiling DeviceDriver.exe 1.0.0.5 (see ../PROTOCOL.md).
+ * Wired USB only: the dongle exposes different interfaces (0xFF60).
  *
  * Build : gcc -O2 -Wall -o ak820ctl ak820ctl.c -lhidapi-hidraw
  */
@@ -54,7 +55,7 @@ static int parse_int(const char *s, int base, int lo, int hi, int *out) {
     return 1;
 }
 
-/* Cherche l'interface de contrôle (0xFF13) pour le PID donné. */
+/* Finds the 0xFF13 control interface for the given PID. */
 static hid_device *open_control(unsigned short pid) {
     hid_device *dev = NULL;
     struct hid_device_info *list = hid_enumerate(VID, pid), *it;
@@ -78,7 +79,7 @@ static hid_device *open_keyboard(void) {
     return dev;
 }
 
-/* Interface de contrôle du dongle 2.4G (usage page 0xFF60, iface 3). */
+/* 2.4G dongle control interface (usage page 0xFF60, iface 3). */
 static hid_device *open_dongle(void) {
     hid_device *dev = NULL;
     struct hid_device_info *list = hid_enumerate(VID, 0xFDFD), *it;
@@ -88,7 +89,7 @@ static hid_device *open_dongle(void) {
         if (it->usage_page == USAGE_PAGE_DONGLE && !dev) {
             dev = hid_open_path(it->path);
             if (!dev)
-                fprintf(stderr, "  ouverture iface %d échouée: %ls\n",
+                fprintf(stderr, "  open iface %d failed: %ls\n",
                         it->interface_number, hid_error(NULL));
         }
     }
@@ -98,7 +99,7 @@ static hid_device *open_dongle(void) {
     return dev;
 }
 
-/* T1 : échange feature 65 octets (04 xx) — cf PROTOCOL.md */
+/* T1: 65-byte feature report exchange (04 xx) — see PROTOCOL.md */
 static int exchange(hid_device *dev, unsigned char pkt[PKT]) {
     unsigned char wire[65] = { 0 };
     unsigned char resp[65] = { 0 };
@@ -132,7 +133,7 @@ static int ack_ok(const unsigned char p[PKT], unsigned char cmd) {
     return p[0] == 4 && p[1] == cmd && p[3] == 1;
 }
 
-/* START avec réessais (clavier occupé ~2 s après une session avortée) */
+/* START with retries (keyboard busy ~2 s after an aborted session) */
 static int start_session(hid_device *dev, unsigned short flag) {
     unsigned char p[PKT];
     for (int i = 0; i < 10; i++) {
@@ -143,10 +144,10 @@ static int start_session(hid_device *dev, unsigned short flag) {
         if (ack_ok(p, 0x18))
             return 0;
         if (!empty && p[3] != 0xff)
-            return 0; /* réponse non-busy */
+            return 0; /* non-busy reply */
         msleep(300);
     }
-    fprintf(stderr, "START refusé\n");
+    fprintf(stderr, "START rejected\n");
     return -1;
 }
 
@@ -166,7 +167,7 @@ static int commit(hid_device *dev) {
     ctrl_pkt(p, 0x02, 0, 0);
     exchange(dev, p);
     if (!ack_ok(p, 0x02)) {
-        fprintf(stderr, "COMMIT refusé (status %02x)\n", p[3]);
+        fprintf(stderr, "COMMIT rejected (status %02x)\n", p[3]);
         return -1;
     }
     return 0;
@@ -210,7 +211,7 @@ static int cmd_battery(int via_dongle) {
     return 0;
 }
 
-/* Session générique : START → cmd → data → COMMIT → FINISH */
+/* Generic session: START → cmd → data → COMMIT → FINISH */
 static int run_session(unsigned char cmd, unsigned char sub, unsigned short value,
                        void (*build_data)(unsigned char [PKT], const void *), const void *ctx) {
     hid_init();
@@ -228,7 +229,7 @@ static int run_session(unsigned char cmd, unsigned char sub, unsigned short valu
             }
             rc = (commit(dev) == 0 && finish(dev, 1) == 0) ? 0 : 1;
         } else {
-            fprintf(stderr, "cmd %02x refusée (status %02x)\n", cmd, p[3]);
+            fprintf(stderr, "cmd %02x rejected (status %02x)\n", cmd, p[3]);
             finish(dev, 1);
         }
     }
@@ -296,8 +297,8 @@ static int cmd_tfttest(int slot) {
     if (!payload) { hid_exit(); return 1; }
     memset(payload, 0xFF, (size_t)padded);
     payload[0] = (unsigned char)frames;
-    payload[1] = 100 / 2;      /* délai frame 0 : 100 ms */
-    payload[2] = 100 / 2;      /* délai frame 1 */
+    payload[1] = 100 / 2;      /* frame 0 delay: 100 ms */
+    payload[2] = 100 / 2;      /* frame 1 delay */
     payload[3] = 0x00;
     /* frame 0 : rouge 0xF800, frame 1 : bleu 0x001F (RGB565 LE) */
     for (int f = 0; f < frames; f++) {
@@ -319,18 +320,18 @@ static int cmd_tfttest(int slot) {
     }
     if (!tft) { fprintf(stderr, "interface TFT introuvable\n"); free(payload); hid_close(dev); hid_exit(); return 1; }
 
-    /* vérifier le descripteur (garde-fou du driver officiel) */
+    /* verify the descriptor (official driver safeguard) */
     unsigned char desc[512] = { 0 };
     int dn = hid_get_report_descriptor(tft, desc, sizeof desc);
     if (dn != (int)sizeof TFT_DATA_DESC ||
         memcmp(desc, TFT_DATA_DESC, sizeof TFT_DATA_DESC) != 0) {
-        fprintf(stderr, "descripteur TFT inattendu (n=%d) — envoi annulé\n", dn);
+        fprintf(stderr, "unexpected TFT descriptor (n=%d) — upload aborted\n", dn);
         for (int i = 0; i < dn; i++) printf("%02x ", desc[i]);
         printf("\n");
         free(payload); hid_close(tft); hid_close(dev); hid_exit(); return 1;
     }
 
-    /* 1. session contrôle : START(0) → 04 72 <slot, blocs> ; chunks ; COMMIT */
+    /* 1. control session: START(0) → 04 72 <slot, blocks>; chunks; COMMIT */
     unsigned char p[PKT];
     if (start_session(dev, 0) != 0) goto fail;
     memset(p, 0, PKT);
@@ -338,7 +339,7 @@ static int cmd_tfttest(int slot) {
     p[8] = chunks & 0xff; p[9] = (chunks >> 8) & 0xff;
     exchange(dev, p);
     if (!ack_ok(p, 0x72)) {
-        fprintf(stderr, "04 72 refusé (status %02x)\n", p[3]);
+        fprintf(stderr, "04 72 rejected (status %02x)\n", p[3]);
         goto fail;
     }
     printf("04 72 ack — envoi de %d blocs de 4096 o…\n", chunks);
@@ -346,7 +347,7 @@ static int cmd_tfttest(int slot) {
         unsigned char rep[TFT_CHUNK + 1] = { 0 };
         memcpy(rep + 1, payload + i * TFT_CHUNK, TFT_CHUNK);
         if (hid_write(tft, rep, sizeof rep) != sizeof rep) {
-            fprintf(stderr, "écriture chunk %d/%d échouée: %ls\n", i + 1, chunks, hid_error(tft));
+            fprintf(stderr, "chunk %d/%d write failed: %ls\n", i + 1, chunks, hid_error(tft));
             goto fail;
         }
         unsigned char ack[64];
@@ -360,10 +361,10 @@ static int cmd_tfttest(int slot) {
     ctrl_pkt(p, 0x02, 0, 0);
     exchange(dev, p);
     if (!ack_ok(p, 0x02)) {
-        fprintf(stderr, "COMMIT refusé (status %02x)\n", p[3]);
+        fprintf(stderr, "COMMIT rejected (status %02x)\n", p[3]);
         goto fail;
     }
-    printf("✔ animation test envoyée (slot %d) — Fn+Suppr pour basculer l'affichage\n", slot);
+    printf("test animation sent (slot %d) — Fn+Delete toggles the display\n", slot);
     free(payload);
     hid_close(tft);
     hid_close(dev);
@@ -387,11 +388,11 @@ static void usage(void) {
         "       ak820ctl sleep <0|1|2|3>            (0,1,5,30 min)\n"
         "       ak820ctl light <mode> <rrggbb> [bright 0-5] [speed 0-5] [dir 0-3] [colorful 0-2]\n"
         "       ak820ctl readrgb <1..9>\n"
-        "       ak820ctl tfttest [slot 1..3]   (trame rouge/bleue sur l'écran)\n",
+        "       ak820ctl tfttest [slot 1..3]   (red/blue test frame on the screen)\n",
         stderr);
 }
 
-/* Analyse "rrggbb" hexadécimal strict (6 chiffres) → r,g,b. */
+/* Strict "rrggbb" hex parsing (6 digits) → r,g,b. */
 static int parse_rgb(const char *s, int *r, int *g, int *b) {
     unsigned int v = 0;
     if (strlen(s) != 6) return 0;
@@ -424,7 +425,7 @@ int main(int argc, char **argv) {
         localtime_r(&t, &tmv);
         int rc = run_session(0x28, 0, 1, build_clock, &tmv);
         if (rc == 0)
-            printf("horloge synchronisée: %04d-%02d-%02d %02d:%02d:%02d\n",
+            printf("clock synchronized: %04d-%02d-%02d %02d:%02d:%02d\n",
                    tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
                    tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
         return rc;
@@ -453,7 +454,7 @@ int main(int argc, char **argv) {
         a[7] = (unsigned char)rain;
         int rc = run_session(0x13, 0, 1, build_light, a);
         if (rc == 0)
-            printf("éclairage appliqué (mode %02x rgb %d,%d,%d bright=%d speed=%d dir=%d)\n",
+            printf("lighting applied (mode %02x rgb %d,%d,%d bright=%d speed=%d dir=%d)\n",
                    mode, r, g, b, bright, speed, dir);
         return rc;
     }

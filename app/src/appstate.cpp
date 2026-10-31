@@ -107,8 +107,8 @@ bool AppState::saveState() const {
 }
 
 QVector<uint8_t> AppState::encodeMacroPayload(bool *ok) const {
-    /* Structure legacy : index 400 o (100 slots × u16 LE offset, 0 = vide),
-       blocs à partir de 400 : [u16 len(actions*2), 0,0] puis actions 4 o. */
+    /* Legacy layout: 400-byte index (100 slots × u16 LE offset, 0 = empty),
+       blocks from offset 400: [u16 len(actions*2), 0,0] then 4-byte actions. */
     QVector<uint8_t> out(400, 0);
     int off = 400;
     *ok = true;

@@ -1,7 +1,7 @@
 /*
- * keyboardview.h — rendu du clavier à partir du layout officiel.
- * Clic gauche : sélection ; clic droit : action contextuelle.
- * Mode Remap : affiche l'action affectée ; mode RGB : la couleur.
+ * keyboardview.h — keyboard rendering from the official layout.
+ * Left click: select; right click: context action.
+ * Remap mode: shows the assigned action; RGB mode: the color.
  */
 #pragma once
 

@@ -17,6 +17,11 @@ SettingsWidget::SettingsWidget(QWidget *parent) : QWidget(parent) {
     m_conn->setObjectName("hint");
     auto *connLay = new QVBoxLayout(connBox);
     connLay->addWidget(m_conn);
+    auto *usbOnly = new QLabel("This app configures the keyboard over wired USB only. "
+                               "The 2.4G dongle and Bluetooth are not supported.");
+    usbOnly->setObjectName("hint");
+    usbOnly->setWordWrap(true);
+    connLay->addWidget(usbOnly);
     root->addWidget(connBox);
 
     auto *powerBox = new QGroupBox("Auto sleep");

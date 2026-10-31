@@ -1,4 +1,4 @@
-/* Diagnostic : descripteur de rapport de l'interface TFT (usage page 0xFF68). */
+/* Diagnostic: dump the TFT interface report descriptor (usage page 0xFF68). */
 #include <hidapi/hidapi.h>
 #include <stdio.h>
 
@@ -11,7 +11,7 @@ int main(void) {
         if (!d) { printf("ouverture impossible: %ls\n", hid_error(NULL)); continue; }
         unsigned char desc[512] = { 0 };
         int n = hid_get_report_descriptor(d, desc, sizeof desc);
-        printf("iface %d, descripteur (%d o):\n ", it->interface_number, n);
+        printf("iface %d, descriptor (%d bytes):\n ", it->interface_number, n);
         for (int i = 0; i < n; i++) printf("%02x ", desc[i]);
         printf("\n");
         hid_close(d);

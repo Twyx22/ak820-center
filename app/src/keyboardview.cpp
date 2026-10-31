@@ -41,7 +41,7 @@ void KeyboardView::clearColors() { m_colors.clear(); update(); }
 
 int KeyboardView::hitTest(const QPoint &pos) const {
     if (!m_layout) return -1;
-    /* mise à l'échelle du rect 800x300 du layout dans le widget */
+    /* scale the 800x300 layout rect into the widget */
     const int pad = 20;
     double sx = (width() - 2.0 * pad) / m_layout->keyboardW;
     double sy = (height() - 2.0 * pad) / m_layout->keyboardH;

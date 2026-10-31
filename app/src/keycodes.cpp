@@ -1,5 +1,5 @@
 /*
- * keycodes.cpp — noms français des codes usage HID keyboard (0x04..0xE7)
+ * keycodes.cpp — English names for HID keyboard usage codes (0x04..0xE7)
  */
 #include "keycodes.h"
 

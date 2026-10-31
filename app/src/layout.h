@@ -11,7 +11,7 @@ namespace ak820 {
 
 struct LayoutKey {
     int code = 0;        /* usage HID USB (0x04..0xE7, 0xAF = Fn) */
-    QString name;        /* libellé */
+    QString name;        /* label */
     int keyIndex = 0;    /* index logique (id officiel) */
     int lightIndex = 0;  /* slot LED dans les banques keymap/RGB (0..143) */
     int row = 0, col = 0;
@@ -20,7 +20,7 @@ struct LayoutKey {
 };
 
 struct Layout {
-    static Layout *instance();   /* singleton chargé depuis les chemins système */
+    static Layout *instance();   /* singleton loaded from system paths */
 
     bool load(const QString &xmlPath);
     const QVector<LayoutKey> &keys() const { return m_keys; }

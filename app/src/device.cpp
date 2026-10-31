@@ -1,5 +1,5 @@
 /*
- * device.cpp — implémentation du protocole legacy AK820 Pro (cf PROTOCOL.md)
+ * device.cpp — AK820 Pro legacy protocol implementation (see PROTOCOL.md)
  */
 #include "device.h"
 
@@ -126,7 +126,7 @@ bool Device::startSession(uint16_t flag, int attempts) {
         bool empty = true;
         for (uint8_t b : p) if (b) { empty = false; break; }
         if (ackOk(p, CMD_START)) return true;
-        if (!empty && p[3] != 0xFF) return true; /* réponse non-busy */
+        if (!empty && p[3] != 0xFF) return true; /* non-busy reply */
         QThread::msleep(300);
     }
     m_error = QStringLiteral("Keyboard refuses to open a session (busy?)");
@@ -156,7 +156,7 @@ bool Device::finishSession(uint16_t flag) {
 }
 
 bool Device::sendMulti(const uint8_t *data, int len) {
-    /* Le driver officiel envoie len>>6 paquets de 64 o avec 10 réessais (FUN_0044eed0) */
+    /* The official driver sends len>>6 packets of 64 B with 10 retries (FUN_0044eed0) */
     int packets = len / PACKET_LEN;
     for (int i = 0; i < packets; i++) {
         Packet p;
@@ -193,17 +193,17 @@ bool Device::writeSetting(uint8_t cmd, uint8_t sub, uint16_t value, const Packet
 }
 
 bool Device::setLighting(const LightingConfig &cfg) {
-    /* Modes = liste exacte de l'UI du driver officiel (combo lan 370-378) :
-       0x00 Éteindre, 0x01 Static On, 0x04 Starlight, 0x05 Fluttering,
+    /* Modes = exact list of the official driver UI (combo lan 370-378):
+       0x00 Off, 0x01 Static On, 0x04 Starlight, 0x05 Fluttering,
        0x07 Dynamic Breathing, 0x09 Colorful Fountain, 0x0A Rainbow Wave,
        0x0B Following Currents, 0x0C Peak Revolving, 0x80 custom.
-       Les modes sont envoyés tels quels (pas de re-mapping). */
+       Modes are sent as-is (no remapping). */
     Packet d;
     d.fill(0);
     d[0] = cfg.mode;
     d[1] = cfg.r; d[2] = cfg.g; d[3] = cfg.b;
-    /* colorful : 0 = statique, 1 = arc-en-ciel, 2 = arc-en-ciel inversé
-       (colonne "colorful" de t_light_data dans le driver officiel). */
+    /* colorful: 0 = fixed, 1 = rainbow, 2 = reversed rainbow
+       ("colorful" column of t_light_data in the official driver). */
     d[8] = cfg.colorful;
     d[9] = cfg.brightness;
     d[10] = cfg.speed;
@@ -341,7 +341,7 @@ bool Device::writeMacroPayload(const QVector<uint8_t> &payload, int blockCount) 
     Packet p;
     ctrlPkt(p, CMD_MACRO_LEN, 0, (uint16_t)(blockCount + 1));
     if (!exchange(p)) { finishSession(1); return false; }
-    /* Trailer AA 55 attendu par le firmware après le payload (FUN_0042d6f0) */
+    /* AA 55 trailer expected by the firmware after the payload (FUN_0042d6f0) */
     QVector<uint8_t> buf = payload;
     int padded = ((buf.size() + PACKET_LEN - 1) / PACKET_LEN) * PACKET_LEN;
     buf.resize(padded);

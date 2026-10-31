@@ -1,7 +1,7 @@
 /*
- * appstate.h — état applicatif partagé (couches keymap, RGB custom, macros).
- * L'app officielle persiste côté client (config.xml) ; le clavier ne reçoit
- * que des écritures. Ici : JSON dans ~/.config/ak820-center/state.json.
+ * appstate.h — shared application state (keymap layers, custom RGB, macros).
+ * The official app persists client-side (config.xml); the keyboard only
+ * receives writes. Here: JSON in ~/.config/ak820-center/state.json.
  */
 #pragma once
 
@@ -15,7 +15,7 @@ namespace ak820 {
 struct MacroAction {
     uint16_t delayMs = 0;
     uint8_t key = 0;
-    uint8_t flags = 0; /* B0=press clavier, 30=release, 90/10 souris, 50=délai */
+    uint8_t flags = 0; /* B0=key press, 30=release, 90/10=mouse, 50=delay */
 };
 
 struct Macro {

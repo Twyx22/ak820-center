@@ -9,9 +9,15 @@ Lighting · Key remapping · Per-key RGB · Macros · TFT screen
 *Reverse-engineered from the official Windows driver — no vendor software required.*
 
 ![Platform](https://img.shields.io/badge/platform-Linux-blue)
+![Connection](https://img.shields.io/badge/connection-USB%20wired%20only-critical)
 ![Built with](https://img.shields.io/badge/built%20with-Qt%206%20%2B%20hidapi-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 ![Status](https://img.shields.io/badge/hardware-tested-success)
+
+> [!IMPORTANT]
+> **USB (wired) only.** The keyboard must be connected with the USB-C cable.
+> The 2.4 GHz dongle and Bluetooth are **not supported** — the control
+> protocol targets the wired vendor interface (`0xFF13`).
 
 </div>
 
@@ -48,7 +54,8 @@ State is stored client-side in `~/.config/ak820-center/state.json` — exactly l
 
 - Linux (developed on Arch, works on any distro with Qt6)
 - Qt 6 (Widgets), hidapi, CMake, GCC/Clang
-- The keyboard connected **wired** (USB-C). The 2.4 GHz dongle and Bluetooth are not supported yet — the control protocol targets the wired vendor interface (`0xFF13`).
+- **The keyboard connected wired (USB-C)** — 2.4 GHz dongle and Bluetooth
+  are not supported (see the note above).
 
 ## Build
 

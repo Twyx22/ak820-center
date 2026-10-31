@@ -30,13 +30,19 @@ MainWindow::MainWindow() {
 
     /* header : titre + badge de connexion */
     auto *header = new QHBoxLayout;
+    auto *titleBox = new QVBoxLayout;
     auto *title = new QLabel("AK820 Center");
     title->setObjectName("headerTitle");
+    auto *subtitle = new QLabel("AJAZZ AK820 Pro — USB (wired) only");
+    subtitle->setObjectName("hint");
+    titleBox->addWidget(title);
+    titleBox->addWidget(subtitle);
+    titleBox->setSpacing(0);
     m_connBadge = new QLabel("Connecting…");
     m_connBadge->setObjectName("hint");
     auto *refreshBtn = new QPushButton("Refresh");
     refreshBtn->setMaximumWidth(90);
-    header->addWidget(title);
+    header->addLayout(titleBox);
     header->addStretch(1);
     header->addWidget(m_connBadge);
     header->addWidget(refreshBtn);
@@ -64,7 +70,7 @@ void MainWindow::refreshConnection() {
         m_connBadge->setText("● Connected");
         m_connBadge->setStyleSheet("color:#7ec97e; font-weight:700;");
     } else {
-        m_connBadge->setText("● Not connected — plug the USB-C cable (wired mode)");
+        m_connBadge->setText("● Not connected — plug the USB-C cable (wired mode only)");
         m_connBadge->setStyleSheet("color:#e0a050; font-weight:700;");
         d->connectKeyboard();
         if (d->isConnected()) {
