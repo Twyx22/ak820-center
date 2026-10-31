@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AK820 Center
+GenericName=AJAZZ AK820 Pro keyboard
+Comment=Configure the AJAZZ AK820 Pro keyboard (lighting, remap, RGB, macros, screen)
+Exec=ak820-center
+Icon=/usr/share/ak820-center/icon.png
+Terminal=false
+Categories=Utility;HardwareSettings;
+Keywords=keyboard;ajazz;ak820;rgb;macro;

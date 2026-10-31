@@ -1,0 +1,30 @@
+# Maintainer: Twyx22
+# Native Linux configuration app for the AJAZZ AK820 Pro keyboard.
+# Build from the packaging/ directory of the repo: makepkg -si
+pkgname=ak820-center
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Native Linux configuration app for the AJAZZ AK820 Pro keyboard (lighting, remap, RGB, macros, TFT)"
+arch=('x86_64')
+url="https://github.com/Twyx22/ak820-center"
+license=('MIT')
+depends=('qt6-base' 'hidapi')
+makedepends=('cmake' 'gcc')
+source=()
+options=(!strip)
+
+build() {
+  cmake -S "$startdir/../src" -B "$srcdir/build" -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$srcdir/build" -j"$(nproc)"
+}
+
+package() {
+  install -Dm755 "$srcdir/build/ak820-center" "$pkgdir/usr/bin/ak820-center"
+  install -Dm644 "$startdir/../resources/rgb-keyboard.xml" \
+    "$pkgdir/usr/share/ak820-center/rgb-keyboard.xml"
+  install -Dm644 "$startdir/../packaging/ak820-center.desktop" \
+    "$pkgdir/usr/share/applications/ak820-center.desktop"
+  install -Dm644 "$startdir/../packaging/99-ajazz-ak820pro.rules" \
+    "$pkgdir/usr/lib/udev/rules.d/99-ajazz-ak820pro.rules"
+  install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

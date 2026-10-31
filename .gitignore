@@ -1,0 +1,25 @@
+# Allowlist-style ignore: the git repo only publishes the app itself.
+# Everything else in this working dir (vendor installers, extracted files,
+# reference clones, Ghidra project, decompiler dumps) stays local.
+
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/PROTOCOL.md
+!/app/
+!/tools/
+!/packaging/
+!/docs/
+
+# build artifacts
+app/build/
+tools/ak820ctl
+tools/tftdesc
+*.o
+*.gpr
+*.rep/
+
+# local metadata
+.mimosa/
+.v2c/
