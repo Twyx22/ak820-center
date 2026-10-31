@@ -15,8 +15,11 @@
 
 # build artifacts
 app/build/
+out/
 tools/ak820ctl
 tools/tftdesc
+tools/dongledesc
+tools/dongletest
 *.o
 *.gpr
 *.rep/
