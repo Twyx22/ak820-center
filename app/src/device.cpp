@@ -54,14 +54,14 @@ Device::Device() = default;
 Device::~Device() { disconnectKeyboard(); }
 
 ConnectionKind Device::connectionKind() const {
-    if (m_dongle) return ConnectionKind::Dongle;
+    if (m_dongle || m_dongleCmd) return ConnectionKind::Dongle;
     if (m_dev) return ConnectionKind::Wired;
     return ConnectionKind::None;
 }
 
 void Device::disconnectKeyboard() {
     QMutexLocker lock(&m_mutex);
-    const bool wasConnected = m_dev || m_dongle;
+    const bool wasConnected = m_dev || m_dongle || m_dongleCmd;
     if (m_dev) {
         hid_close((hid_device *)m_dev);
         m_dev = nullptr;
@@ -69,6 +69,10 @@ void Device::disconnectKeyboard() {
     if (m_dongle) {
         hid_close((hid_device *)m_dongle);
         m_dongle = nullptr;
+    }
+    if (m_dongleCmd) {
+        hid_close((hid_device *)m_dongleCmd);
+        m_dongleCmd = nullptr;
     }
     if (wasConnected) {
         m_path.clear();
@@ -117,28 +121,38 @@ bool Device::connectDongle() {
 
 bool Device::connectDongleLocked() {
     /* EXPERIMENTAL, pending hardware validation — see PROTOCOL.md "2.4G dongle".
-       The dongle exposes no feature reports: MI_03 (preferred) carries
-       32-byte output/input reports used by the T2 command transport. */
-    if (m_dongle) return true;
+       The dongle exposes two vendor interfaces (both output/input reports,
+       no feature reports):
+       - MI_03 (32-byte): T2 transport with checksum (single-key writes,
+         real-time frames).
+       - MI_04 (64-byte): T1-style command traffic (START/data/COMMIT,
+         battery). Hardware-verified: the dongle-only status stub "0f 01 01 11"
+         is answered on this interface, and command acks appear here once the
+         keyboard is joined over 2.4G. */
+    if (m_dongle && m_dongleCmd) return true;
     if (hid_init() < 0) {
         m_error = QStringLiteral("hid_init failed");
         return false;
     }
     struct hid_device_info *list = hid_enumerate(VID, PID_DONGLE), *it;
-    /* Pass 1: the MI_03 config interface; pass 2: any 0xFF60 interface. */
-    for (int pass = 0; pass < 2 && !m_dongle; pass++) {
-        for (it = list; it; it = it->next) {
-            if (it->usage_page != USAGE_PAGE_DONGLE) continue;
-            if (pass == 0 && it->interface_number != DONGLE_CONFIG_IFACE) continue;
-            hid_device *dev = hid_open_path(it->path);
-            if (!dev) continue;
-            m_dongle = dev;
-            m_path = QString::fromUtf8(it->path);
-            break;
-        }
+    for (it = list; it && !m_dongle; it = it->next) {
+        if (it->usage_page != USAGE_PAGE_DONGLE) continue;
+        if (it->interface_number != DONGLE_CONFIG_IFACE) continue;
+        hid_device *dev = hid_open_path(it->path);
+        if (!dev) continue;
+        m_dongle = dev;
+        m_path = QString::fromUtf8(it->path);
+    }
+    for (it = list; it && !m_dongleCmd; it = it->next) {
+        if (it->usage_page != USAGE_PAGE_DONGLE) continue;
+        if (it->interface_number == DONGLE_CONFIG_IFACE) continue;
+        hid_device *dev = hid_open_path(it->path);
+        if (!dev) continue;
+        m_dongleCmd = dev;
+        if (m_path.isEmpty()) m_path = QString::fromUtf8(it->path);
     }
     hid_free_enumeration(list);
-    if (m_dongle) {
+    if (m_dongle || m_dongleCmd) {
         emit connectedChanged(true);
         return true;
     }
@@ -556,21 +570,30 @@ void Device::abortSession(uint16_t flag) {
 
 BatteryStatus Device::batteryDongle() {
     /* The dongle has no feature reports: the T1 battery request [20 01] goes
-       out as a raw 33-byte output report ([report ID 0][20 01][zeros]),
-       answered by an input report [20 01 00 pct] (FF = wired full).
-       No 04 prefix, exactly like the wired T1 request (PROTOCOL.md). */
+       out as a raw 64-byte output report on the MI_04 command interface
+       ([report ID 0][20 01][zeros]), answered by an input report
+       [20 01 00 pct] (FF = wired full). No 04 prefix, exactly like the wired
+       T1 request (PROTOCOL.md). While no keyboard is joined over 2.4G, the
+       dongle alone answers every write with the status stub "0f 01 01 11". */
     BatteryStatus st;
-    unsigned char wire[T2_PACKET_LEN] = { 0 };
-    unsigned char resp[T2_PACKET_LEN] = { 0 };
+    if (!m_dongleCmd) {
+        m_error = QStringLiteral("Dongle command interface (MI_04) not found.");
+        return st;
+    }
+    unsigned char wire[65] = { 0 };
+    unsigned char resp[65] = { 0 };
     wire[1] = 0x20; wire[2] = 0x01;
     QThread::msleep(CMD_DELAY_MS);
-    if (hid_write((hid_device *)m_dongle, wire, T2_PACKET_LEN) < 0) {
-        m_error = QString::fromWCharArray(hid_error((hid_device *)m_dongle));
+    if (hid_write((hid_device *)m_dongleCmd, wire, sizeof wire) < 0) {
+        m_error = QString::fromWCharArray(hid_error((hid_device *)m_dongleCmd));
         return st;
     }
     QThread::msleep(READ_DELAY_MS);
-    int n = hid_read_timeout((hid_device *)m_dongle, resp, T2_PACKET_LEN, 1000);
-    if (n >= 5 && resp[1] == 0x20 && resp[2] == 0x01) {
+    int n = hid_read_timeout((hid_device *)m_dongleCmd, resp, sizeof resp, 1000);
+    if (n >= 4 && resp[1] == 0x0f && resp[2] == 0x01 && resp[3] == 0x11) {
+        m_error = QStringLiteral("Dongle reachable, but no keyboard is joined "
+                                 "over 2.4G (switch the keyboard to 2.4G mode).");
+    } else if (n >= 5 && resp[1] == 0x20 && resp[2] == 0x01) {
         st.valid = true;
         if (resp[4] == 0xFF) { st.wiredFull = true; st.percent = 100; }
         else if (resp[4] <= 100) st.percent = resp[4];
@@ -580,7 +603,7 @@ BatteryStatus Device::batteryDongle() {
 
 BatteryStatus Device::battery() {
     QMutexLocker lock(&m_mutex);
-    if (m_dongle) return batteryDongle();
+    if (m_dongle || m_dongleCmd) return batteryDongle();
     BatteryStatus st;
     if (!connectLocked()) return st;
     unsigned char wire[65] = { 0 };

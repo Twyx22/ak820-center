@@ -203,6 +203,9 @@ KeymapWidget::KeymapWidget(QWidget *parent) : QWidget(parent) {
     connect(m_apply, &QPushButton::clicked, this, &KeymapWidget::applyLayer);
     connect(m_applyKey, &QPushButton::clicked, this, &KeymapWidget::applyKeyOnly);
     connect(m_reset, &QPushButton::clicked, this, &KeymapWidget::resetLayer);
+    /* Profile apply / macro list changes refresh the labels immediately. */
+    connect(AppState::instance(), &AppState::layersChanged, this, &KeymapWidget::refreshActions);
+    connect(AppState::instance(), &AppState::macrosChanged, this, &KeymapWidget::refreshActions);
     switchLayer(0);
 }
 
@@ -262,9 +265,12 @@ void KeymapWidget::applyLayer() {
     m_status->setText(tr("Writing layer…"));
     m_status->setStyleSheet(QString());
     const int layer = m_layer;
+    /* Copy the slots: the job reads them on the HID thread while the GUI
+       thread can still edit the layer (the keyboard view stays enabled). */
+    const auto keySlots = AppState::instance()->layer[layer];
     HidWorker::run(this,
-        [layer](Device *dev) {
-            return dev->writeKeymapLayer(layer, AppState::instance()->layer[layer]);
+        [layer, keySlots](Device *dev) {
+            return dev->writeKeymapLayer(layer, keySlots);
         },
         [this, layer](bool ok, QString err) {
             setBusy(false);
@@ -285,9 +291,10 @@ void KeymapWidget::applyKeyOnly() {
     m_status->setStyleSheet(QString());
     const int layer = m_layer;
     const int slot = m_lastSlot;
+    const KeyAction action = AppState::instance()->layer[layer][slot];
     HidWorker::run(this,
-        [layer, slot](Device *dev) {
-            return dev->writeKeySlot(layer, slot, AppState::instance()->layer[layer][slot]);
+        [layer, slot, action](Device *dev) {
+            return dev->writeKeySlot(layer, slot, action);
         },
         [this](bool ok, QString err) {
             setBusy(false);

@@ -95,6 +95,11 @@ MacroWidget::MacroWidget(QWidget *parent) : QWidget(parent) {
     connect(m_add, &QPushButton::clicked, this, &MacroWidget::addAction);
     connect(m_delAct, &QPushButton::clicked, this, &MacroWidget::deleteAction);
     connect(m_send, &QPushButton::clicked, this, &MacroWidget::sendMacros);
+    /* Profile apply refreshes the macro list immediately. */
+    connect(AppState::instance(), &AppState::macrosChanged, this, [this] {
+        refreshList();
+        refreshActions();
+    });
     refreshList();
 }
 

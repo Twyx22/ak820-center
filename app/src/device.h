@@ -68,7 +68,9 @@ class Device : public QObject {
 public:
     static Device *instance();
 
-    bool isConnected() const { return m_dev != nullptr || m_dongle != nullptr; }
+    bool isConnected() const {
+        return m_dev != nullptr || m_dongle != nullptr || m_dongleCmd != nullptr;
+    }
     ConnectionKind connectionKind() const;
     QString lastError() const { return m_error; }
     QString devicePath() const { return m_path; }
@@ -76,8 +78,8 @@ public:
     /* Opens the 0xFF13 control interface (wired 8009/800A). USB wired only. */
     bool connectKeyboard();
     /* EXPERIMENTAL, pending hardware validation: opens the 2.4G dongle
-       control interface (PID FDFD, usage page 0xFF60; MI_03 preferred,
-       any 0xFF60 interface accepted). */
+       interfaces (PID FDFD, usage page 0xFF60): MI_03 (32-byte, T2 transport
+       for single-key/realtime) and MI_04 (64-byte, T1-style command traffic). */
     bool connectDongle();
     /* Closes whatever transport is open (wired handle, dongle handle, or both). */
     void disconnectKeyboard();
@@ -131,7 +133,8 @@ private:
     bool sendMulti(const uint8_t *data, int len); /* 64-byte multi-packet send */
 
     void *m_dev = nullptr;      /* hid_device* (wired) */
-    void *m_dongle = nullptr;   /* hid_device* (2.4G dongle) */
+    void *m_dongle = nullptr;   /* hid_device* (2.4G dongle MI_03: T2, 32-byte) */
+    void *m_dongleCmd = nullptr; /* hid_device* (2.4G dongle MI_04: T1-like, 64-byte) */
     QString m_error;
     QString m_path;
     QMutex m_mutex;

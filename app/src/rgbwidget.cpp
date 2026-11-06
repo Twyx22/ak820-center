@@ -92,10 +92,15 @@ RgbWidget::RgbWidget(QWidget *parent) : QWidget(parent) {
     connect(m_apply, &QPushButton::clicked, this, &RgbWidget::apply);
     connect(m_loadBtn, &QPushButton::clicked, this, &RgbWidget::loadFromKeyboard);
     connect(m_view, &KeyboardView::slotActivated, this, &RgbWidget::keyClicked);
+    /* Profile apply updates the painting view immediately. */
+    connect(AppState::instance(), &AppState::rgbChanged, this, &RgbWidget::refreshColors);
     connect(&m_previewTimer, &QTimer::timeout, this, [this]() {
-        /* Fire-and-forget frame push; failures surface once, below. */
-        HidWorker::run(this, [](Device *dev) {
-            return dev->pushRealtimeFrame(AppState::instance()->customRgb.data());
+        /* Fire-and-forget frame push; failures surface once, below.
+           Copy the bank: the job reads it on the HID thread while the GUI
+           thread keeps painting (same reason as apply() below). */
+        const auto rgb = AppState::instance()->customRgb;
+        HidWorker::run(this, [rgb](Device *dev) {
+            return dev->pushRealtimeFrame(rgb.data());
         }, [this](bool ok, QString err) {
             if (ok) {
                 m_liveWarned = false;
