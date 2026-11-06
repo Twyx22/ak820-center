@@ -8,7 +8,7 @@ int main(void) {
     for (it = list; it; it = it->next) {
         if (it->usage_page != 0xFF68) continue;
         hid_device *d = hid_open_path(it->path);
-        if (!d) { printf("ouverture impossible: %ls\n", hid_error(NULL)); continue; }
+        if (!d) { printf("open failed: %ls\n", hid_error(NULL)); continue; }
         unsigned char desc[512] = { 0 };
         int n = hid_get_report_descriptor(d, desc, sizeof desc);
         printf("iface %d, descriptor (%d bytes):\n ", it->interface_number, n);

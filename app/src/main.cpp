@@ -1,7 +1,10 @@
 #include "mainwindow.h"
+#include "hidworker.h"
 
 #include <QApplication>
 #include <QFont>
+#include <QLocale>
+#include <QTranslator>
 
 static const char *kDarkStyle = R"(
 QWidget { background: #1b1c20; color: #e4e4e8; font-size: 13px; }
@@ -57,6 +60,13 @@ QLabel#statusErr { color: #e07070; font-weight: 700; }
 QLabel#hint { color: #8a8a94; }
 QLabel#headerTitle { font-size: 17px; font-weight: 800; color: #ffffff; }
 
+QListWidget#sidebar { background: #17181c; }
+QListWidget#sidebar::item {
+    color: #9a9aa4; padding: 4px 2px; border-radius: 6px;
+}
+QListWidget#sidebar::item:hover { color: #d8d8de; }
+QListWidget#sidebar::item:selected { background: #2e3038; color: #ffffff; }
+
 QListWidget, QTableWidget, QLineEdit, QSpinBox {
     background: #222329; border: 1px solid #3a3d47; border-radius: 6px; padding: 4px;
 }
@@ -71,9 +81,24 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("ak820-center");
     QApplication::setOrganizationName("ak820");
+
+    /* Qt translations (embedded .qm files under ":/i18n" by
+       qt_add_translations; fall back to the build directory). */
+    QTranslator translator;
+    if (translator.load(QLocale::system(), QStringLiteral("ak820-center"),
+                        QStringLiteral("_"), QStringLiteral(":/i18n")) ||
+        translator.load(QLocale::system(), QStringLiteral("ak820-center"),
+                        QStringLiteral("_"), QCoreApplication::applicationDirPath())) {
+        QApplication::installTranslator(&translator);
+    }
+
     app.setStyleSheet(QString::fromUtf8(kDarkStyle));
     QApplication::setFont(QFont("Inter", 10));
+    /* Blocking HID jobs run on the worker's own thread (see hidworker.h). */
+    ak820::HidWorker::startWorker();
     ak820::MainWindow win;
     win.show();
-    return app.exec();
+    const int rc = app.exec();
+    ak820::HidWorker::stopWorker();
+    return rc;
 }

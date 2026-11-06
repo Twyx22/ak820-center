@@ -72,6 +72,7 @@ cmake --build app/build -j$(nproc)
 ```bash
 sudo install -Dm755 app/build/ak820-center /usr/local/bin/ak820-center
 sudo install -Dm644 resources/rgb-keyboard.xml /usr/share/ak820-center/rgb-keyboard.xml
+sudo install -Dm644 resources/icon.png /usr/share/ak820-center/icon.png
 sudo install -Dm644 packaging/ak820-center.desktop /usr/share/applications/
 ```
 
@@ -105,6 +106,18 @@ ak820ctl light 1 ff0000 5 0 0 0   # mode 1 (static), red, full brightness
 ak820ctl tfttest 1                # upload a red/blue test animation to the TFT
 ```
 
+## Roadmap (v2)
+
+Planned for the next version of the app:
+
+- 2.4G dongle support (experimental)
+- Real-time per-key lighting preview
+- Music rhythm mode (experimental)
+- Single-key remap apply
+- Profiles with import/export
+- TFT text overlay
+- Sidebar UI rework
+
 ## How it was made
 
 This app is a full reverse-engineering of the official AJAZZ AK820 Pro Windows
@@ -130,6 +143,7 @@ The full wire protocol, verified against the real hardware, is documented in
 - [wsclx/ak820pro-modder](https://github.com/wsclx/ak820pro-modder) — protocol research on both firmware families
 - [MemerGamer/AjazzAk820ProUnofficialWebdriver](https://github.com/MemerGamer/AjazzAk820ProUnofficialWebdriver) — WebHID configurator
 - gohv/EPOMAKER-Ajazz-AK820-Pro, gusleig/ajazz-ak820-pro-mac, vespovios — legacy packet fixtures
+- Sidebar tab icons (`resources/icons/`) — adapted from the official AJAZZ driver skin for interoperability; MIT-licensed, not affiliated with AJAZZ
 
 ## Disclaimer
 

@@ -2,7 +2,7 @@
 # Native Linux configuration app for the AJAZZ AK820 Pro keyboard.
 # Build from the packaging/ directory of the repo: makepkg -si
 pkgname=ak820-center
-pkgver=1.0.0
+pkgver=2.0.0
 pkgrel=1
 pkgdesc="Native Linux configuration app for the AJAZZ AK820 Pro keyboard (lighting, remap, RGB, macros, TFT)"
 arch=('x86_64')
@@ -14,7 +14,7 @@ source=()
 options=(!strip)
 
 build() {
-  cmake -S "$startdir/../src" -B "$srcdir/build" -DCMAKE_BUILD_TYPE=Release
+  cmake -S "$startdir/../app" -B "$srcdir/build" -DCMAKE_BUILD_TYPE=Release
   cmake --build "$srcdir/build" -j"$(nproc)"
 }
 
@@ -22,6 +22,8 @@ package() {
   install -Dm755 "$srcdir/build/ak820-center" "$pkgdir/usr/bin/ak820-center"
   install -Dm644 "$startdir/../resources/rgb-keyboard.xml" \
     "$pkgdir/usr/share/ak820-center/rgb-keyboard.xml"
+  install -Dm644 "$startdir/../resources/icon.png" \
+    "$pkgdir/usr/share/ak820-center/icon.png"
   install -Dm644 "$startdir/../packaging/ak820-center.desktop" \
     "$pkgdir/usr/share/applications/ak820-center.desktop"
   install -Dm644 "$startdir/../packaging/99-ajazz-ak820pro.rules" \

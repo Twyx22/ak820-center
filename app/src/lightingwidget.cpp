@@ -1,5 +1,9 @@
 #include "lightingwidget.h"
 
+#include "appstate.h"
+#include "hidworker.h"
+
+#include <QApplication>
 #include <QColorDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -58,53 +62,53 @@ LightingWidget::LightingWidget(QWidget *parent) : QWidget(parent) {
     root->setContentsMargins(12, 12, 12, 12);
     root->setSpacing(10);
 
-    auto *fxBox = new QGroupBox("Effect");
+    auto *fxBox = new QGroupBox(tr("Effect"));
     auto *fx = new QFormLayout(fxBox);
     fx->setSpacing(10);
     m_mode = new QComboBox;
     for (const ModeDef &m : kModes)
-        m_mode->addItem(QString::fromUtf8(m.label), m.id);
+        m_mode->addItem(tr(m.label), m.id);
     m_mode->setCurrentIndex(0); /* static */
-    fx->addRow("Mode", m_mode);
+    fx->addRow(tr("Mode"), m_mode);
 
     m_colorful = new QComboBox;
-    m_colorful->addItem("Fixed color", 0);
-    m_colorful->addItem("Rainbow", 1);
-    m_colorful->addItem("Rainbow (reversed)", 2);
-    fx->addRow("Color mode", m_colorful);
+    m_colorful->addItem(tr("Fixed color"), 0);
+    m_colorful->addItem(tr("Rainbow"), 1);
+    m_colorful->addItem(tr("Rainbow (reversed)"), 2);
+    fx->addRow(tr("Color mode"), m_colorful);
 
     auto *colorRow = new QWidget;
     auto *colorLay = new QHBoxLayout(colorRow);
     colorLay->setContentsMargins(0, 0, 0, 0);
     m_preview = new ColorPreview(&m_color);
-    m_colorBtn = new QPushButton("Pick color…");
+    m_colorBtn = new QPushButton(tr("Pick color…"));
     colorLay->addWidget(m_preview);
     colorLay->addWidget(m_colorBtn);
     colorLay->addStretch(1);
-    fx->addRow("Color", colorRow);
+    fx->addRow(tr("Color"), colorRow);
     root->addWidget(fxBox);
 
-    auto *parBox = new QGroupBox("Parameters");
+    auto *parBox = new QGroupBox(tr("Parameters"));
     auto *par = new QFormLayout(parBox);
     par->setSpacing(10);
     m_bright = new QSlider(Qt::Horizontal);
     m_bright->setRange(0, 5); m_bright->setValue(5);
     m_bright->setTickPosition(QSlider::TicksBelow);
-    par->addRow("Brightness (0-5)", m_bright);
+    par->addRow(tr("Brightness (0-5)"), m_bright);
 
     m_speed = new QSlider(Qt::Horizontal);
     m_speed->setRange(0, 5); m_speed->setValue(3);
     m_speed->setTickPosition(QSlider::TicksBelow);
-    par->addRow("Speed (0-5)", m_speed);
+    par->addRow(tr("Speed (0-5)"), m_speed);
 
     m_dir = new QSlider(Qt::Horizontal);
     m_dir->setRange(0, 3); m_dir->setValue(0);
     m_dir->setPageStep(1);
-    par->addRow("Direction (Left/Down/Up/Right)", m_dir);
+    par->addRow(tr("Direction (Left/Down/Up/Right)"), m_dir);
     root->addWidget(parBox);
 
     auto *bottom = new QHBoxLayout;
-    m_apply = new QPushButton("Apply to keyboard");
+    m_apply = new QPushButton(tr("Apply to keyboard"));
     m_apply->setObjectName("accent");
     m_apply->setMinimumHeight(38);
     m_apply->setMinimumWidth(200);
@@ -120,17 +124,16 @@ LightingWidget::LightingWidget(QWidget *parent) : QWidget(parent) {
 
     connect(m_colorBtn, &QPushButton::clicked, this, &LightingWidget::pickColor);
     connect(m_apply, &QPushButton::clicked, this, &LightingWidget::apply);
+
+    /* Restore the last applied effect; keep following external changes
+       (e.g. tray quick presets). */
+    setControls(AppState::instance()->lighting);
+    connect(AppState::instance(), &AppState::lightingChanged, this, [this] {
+        setControls(AppState::instance()->lighting);
+    });
 }
 
-void LightingWidget::pickColor() {
-    QColor c = QColorDialog::getColor(m_color, this, "Backlight color");
-    if (c.isValid()) {
-        m_color = c;
-        m_preview->update();
-    }
-}
-
-void LightingWidget::apply() {
+LightingConfig LightingWidget::currentConfig() const {
     LightingConfig cfg;
     cfg.mode = (uint8_t)m_mode->currentData().toInt();
     cfg.r = m_color.red(); cfg.g = m_color.green(); cfg.b = m_color.blue();
@@ -138,13 +141,50 @@ void LightingWidget::apply() {
     cfg.brightness = (uint8_t)m_bright->value();
     cfg.speed = (uint8_t)m_speed->value();
     cfg.direction = (uint8_t)m_dir->value();
-    if (Device::instance()->setLighting(cfg))
-        m_status->setText("Applied.");
-    else
-        m_status->setText(QString("Error: %1").arg(Device::instance()->lastError()));
-    m_status->setObjectName(m_status->text().startsWith("Applied") ? "statusOk" : "statusErr");
-    m_status->setStyleSheet(m_status->objectName() == "statusOk"
-                                ? "color:#7ec97e;" : "color:#e07070;");
+    return cfg;
+}
+
+void LightingWidget::setControls(const LightingConfig &cfg) {
+    const int mi = m_mode->findData(cfg.mode);
+    if (mi >= 0) m_mode->setCurrentIndex(mi);
+    const int ci = m_colorful->findData(cfg.colorful);
+    if (ci >= 0) m_colorful->setCurrentIndex(ci);
+    m_bright->setValue(cfg.brightness);
+    m_speed->setValue(cfg.speed);
+    m_dir->setValue(cfg.direction);
+    m_color = QColor(cfg.r, cfg.g, cfg.b);
+    m_preview->update();
+}
+
+void LightingWidget::pickColor() {
+    QColor c = QColorDialog::getColor(m_color, this, tr("Backlight color"));
+    if (c.isValid()) {
+        m_color = c;
+        m_preview->update();
+    }
+}
+
+void LightingWidget::apply() {
+    const LightingConfig cfg = currentConfig();
+
+    m_apply->setEnabled(false);
+    m_status->setText(tr("Applying…"));
+    m_status->setStyleSheet(QStringLiteral("color:#8a8a94;"));
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    HidWorker::run(this, [cfg](Device *dev) { return dev->setLighting(cfg); },
+                   [this, cfg](bool ok, QString err) {
+        QApplication::restoreOverrideCursor();
+        m_apply->setEnabled(true);
+        if (ok) {
+            AppState::instance()->setLightingConfig(cfg);
+            m_status->setText(tr("Applied."));
+            m_status->setStyleSheet(QStringLiteral("color:#7ec97e;"));
+        } else {
+            m_status->setText(tr("Error: %1").arg(err));
+            m_status->setStyleSheet(QStringLiteral("color:#e07070;"));
+        }
+    });
 }
 
 } /* namespace ak820 */

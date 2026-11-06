@@ -20,20 +20,24 @@ public:
 private slots:
     void keyClicked(int lightIndex);
     void applyLayer();
+    void applyKeyOnly();
     void resetLayer();
     void switchLayer(int layer);
 
 private:
     void refreshActions();
+    void setBusy(bool busy);
 
     KeyboardView *m_view = nullptr;
     QPushButton *m_layerBase = nullptr;
     QPushButton *m_layerFn = nullptr;
     QPushButton *m_apply = nullptr;
+    QPushButton *m_applyKey = nullptr;
     QPushButton *m_reset = nullptr;
     QLabel *m_status = nullptr;
     QLabel *m_hint = nullptr;
     int m_layer = 0;
+    int m_lastSlot = -1;   /* slot edited last, target of "apply key only" */
 };
 
 /* Single-key assignment dialog. */

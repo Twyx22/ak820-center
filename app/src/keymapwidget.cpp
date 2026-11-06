@@ -1,4 +1,5 @@
 #include "keymapwidget.h"
+#include "hidworker.h"
 #include "keycodes.h"
 #include "layout.h"
 
@@ -162,15 +163,17 @@ KeymapWidget::KeymapWidget(QWidget *parent) : QWidget(parent) {
     m_view->setLayout(Layout::instance());
     m_view->setMode(KeyboardView::ModeRemap);
 
-    m_layerBase = new QPushButton("Base layer");
-    m_layerFn = new QPushButton("Fn layer");
+    m_layerBase = new QPushButton(tr("Base layer"));
+    m_layerFn = new QPushButton(tr("Fn layer"));
     m_layerBase->setCheckable(true);
     m_layerFn->setCheckable(true);
 
-    m_apply = new QPushButton("Write layer to keyboard");
+    m_apply = new QPushButton(tr("Write layer to keyboard"));
     m_apply->setObjectName("accent");
-    m_reset = new QPushButton("Reset all to default");
-    m_hint = new QLabel("Click a key to assign an action. Base layer = normal keys, Fn layer = hold Fn.");
+    m_applyKey = new QPushButton(tr("Apply this key only (experimental)"));
+    m_applyKey->setEnabled(false);
+    m_reset = new QPushButton(tr("Reset all to default"));
+    m_hint = new QLabel(tr("Click a key to assign an action. Base layer = normal keys, Fn layer = hold Fn."));
     m_hint->setObjectName("hint");
     m_status = new QLabel;
 
@@ -181,6 +184,7 @@ KeymapWidget::KeymapWidget(QWidget *parent) : QWidget(parent) {
 
     auto *btnLay = new QHBoxLayout;
     btnLay->addWidget(m_apply);
+    btnLay->addWidget(m_applyKey);
     btnLay->addWidget(m_reset);
     btnLay->addStretch(1);
 
@@ -197,6 +201,7 @@ KeymapWidget::KeymapWidget(QWidget *parent) : QWidget(parent) {
     connect(m_layerBase, &QPushButton::clicked, this, [this]() { switchLayer(0); });
     connect(m_layerFn, &QPushButton::clicked, this, [this]() { switchLayer(1); });
     connect(m_apply, &QPushButton::clicked, this, &KeymapWidget::applyLayer);
+    connect(m_applyKey, &QPushButton::clicked, this, &KeymapWidget::applyKeyOnly);
     connect(m_reset, &QPushButton::clicked, this, &KeymapWidget::resetLayer);
     switchLayer(0);
 }
@@ -238,17 +243,64 @@ void KeymapWidget::keyClicked(int lightIndex) {
     if (dlg.exec() == QDialog::Accepted) {
         AppState::instance()->layer[m_layer][lightIndex] = dlg.result();
         AppState::instance()->saveState();
+        m_lastSlot = lightIndex;
+        m_applyKey->setEnabled(true);
         refreshActions();
     }
 }
 
+void KeymapWidget::setBusy(bool busy) {
+    m_layerBase->setEnabled(!busy);
+    m_layerFn->setEnabled(!busy);
+    m_apply->setEnabled(!busy);
+    m_applyKey->setEnabled(!busy && m_lastSlot >= 0);
+    m_reset->setEnabled(!busy);
+}
+
 void KeymapWidget::applyLayer() {
-    if (Device::instance()->writeKeymapLayer(m_layer, AppState::instance()->layer[m_layer]))
-        m_status->setText(QString("Layer %1 written.").arg(m_layer == 0 ? "base" : "Fn"));
-    else
-        m_status->setText(QString("Error: %1").arg(Device::instance()->lastError()));
-    m_status->setStyleSheet(m_status->text().startsWith("Layer")
-                                ? "color:#7ec97e;" : "color:#e07070;");
+    setBusy(true);
+    m_status->setText(tr("Writing layer…"));
+    m_status->setStyleSheet(QString());
+    const int layer = m_layer;
+    HidWorker::run(this,
+        [layer](Device *dev) {
+            return dev->writeKeymapLayer(layer, AppState::instance()->layer[layer]);
+        },
+        [this, layer](bool ok, QString err) {
+            setBusy(false);
+            if (ok) {
+                m_status->setText(tr("Layer %1 written.").arg(layer == 0 ? tr("base") : tr("Fn")));
+                m_status->setStyleSheet("color:#7ec97e;");
+            } else {
+                m_status->setText(tr("Error: %1").arg(err));
+                m_status->setStyleSheet("color:#e07070;");
+            }
+        });
+}
+
+void KeymapWidget::applyKeyOnly() {
+    if (m_lastSlot < 0) return;
+    setBusy(true);
+    m_status->setText(tr("Writing key…"));
+    m_status->setStyleSheet(QString());
+    const int layer = m_layer;
+    const int slot = m_lastSlot;
+    HidWorker::run(this,
+        [layer, slot](Device *dev) {
+            return dev->writeKeySlot(layer, slot, AppState::instance()->layer[layer][slot]);
+        },
+        [this](bool ok, QString err) {
+            setBusy(false);
+            if (ok) {
+                m_status->setText(tr("Key written."));
+                m_status->setStyleSheet("color:#7ec97e;");
+            } else {
+                m_status->setText(tr("Error: %1 Single-key writes require the 2.4G "
+                                     "dongle; a full-layer write also works over USB.")
+                                      .arg(err));
+                m_status->setStyleSheet("color:#e07070;");
+            }
+        });
 }
 
 void KeymapWidget::resetLayer() {

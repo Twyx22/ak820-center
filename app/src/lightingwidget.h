@@ -23,6 +23,9 @@ private slots:
     void pickColor();
 
 private:
+    LightingConfig currentConfig() const;
+    void setControls(const LightingConfig &cfg);
+
     QComboBox *m_mode = nullptr;
     QPushButton *m_colorBtn = nullptr;
     QComboBox *m_colorful = nullptr;

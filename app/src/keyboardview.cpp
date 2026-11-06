@@ -11,6 +11,12 @@ KeyboardView::KeyboardView(QWidget *parent) : QWidget(parent) {
     setMouseTracking(true);
 }
 
+QSize KeyboardView::sizeHint() const {
+    if (!m_layout) return QSize(880, 360);
+    /* Natural fit of the 800x300 layout rect plus the painting margin. */
+    return QSize(m_layout->keyboardW + 40, m_layout->keyboardH + 40);
+}
+
 void KeyboardView::setLayout(const Layout *layout) {
     m_layout = layout;
     m_actions.clear();
@@ -81,10 +87,11 @@ void KeyboardView::paintEvent(QPaintEvent *) {
         QColor keyFill(44, 44, 52);
         if (m_mode == ModeRgb && m_colors.contains(k.lightIndex))
             keyFill = m_colors[k.lightIndex];
+        if (m_hovered == k.lightIndex) keyFill = keyFill.lighter(120);
         if (m_selected == k.lightIndex) keyFill = keyFill.lighter(160);
 
         p.setPen(QPen(m_selected == k.lightIndex ? QColor(255, 190, 60)
-                                                 : QColor(20, 20, 24),
+                                                 : QColor(120, 122, 132),
                       m_selected == k.lightIndex ? 2 : 1));
         p.setBrush(keyFill);
         p.drawRoundedRect(r, 4 * s, 4 * s);
@@ -112,6 +119,19 @@ void KeyboardView::mousePressEvent(QMouseEvent *ev) {
 void KeyboardView::mouseMoveEvent(QMouseEvent *ev) {
     int li = hitTest(ev->pos());
     setCursor(li >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    if (li != m_hovered) {
+        m_hovered = li;
+        update();
+    }
+}
+
+void KeyboardView::leaveEvent(QEvent *ev) {
+    QWidget::leaveEvent(ev);
+    if (m_hovered >= 0) {
+        m_hovered = -1;
+        unsetCursor();
+        update();
+    }
 }
 
 } /* namespace ak820 */

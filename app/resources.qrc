@@ -1,0 +1,17 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="tab_home.png">../resources/icons/tab_home.png</file>
+        <file alias="tab_light.png">../resources/icons/tab_light.png</file>
+        <file alias="tab_customkey.png">../resources/icons/tab_customkey.png</file>
+        <file alias="tab_customlight.png">../resources/icons/tab_customlight.png</file>
+        <file alias="tab_userlight.png">../resources/icons/tab_userlight.png</file>
+        <file alias="tab_macro.png">../resources/icons/tab_macro.png</file>
+        <file alias="tab_tft.png">../resources/icons/tab_tft.png</file>
+        <file alias="tab_config.png">../resources/icons/tab_config.png</file>
+        <file alias="tab_music.png">../resources/icons/tab_music.png</file>
+        <file alias="tab_sidelight.png">../resources/icons/tab_sidelight.png</file>
+    </qresource>
+    <qresource prefix="/">
+        <file alias="icon.png">../resources/icon.png</file>
+    </qresource>
+</RCC>

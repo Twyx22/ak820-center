@@ -1,5 +1,5 @@
 /*
- * layout.h — parsing du layout clavier (XML officiel rgb-keyboard.xml)
+ * layout.h — keyboard layout parsing (official rgb-keyboard.xml)
  */
 #pragma once
 
@@ -10,12 +10,12 @@
 namespace ak820 {
 
 struct LayoutKey {
-    int code = 0;        /* usage HID USB (0x04..0xE7, 0xAF = Fn) */
+    int code = 0;        /* USB HID usage (0x04..0xE7, 0xAF = Fn) */
     QString name;        /* label */
-    int keyIndex = 0;    /* index logique (id officiel) */
-    int lightIndex = 0;  /* slot LED dans les banques keymap/RGB (0..143) */
+    int keyIndex = 0;    /* logical index (official id) */
+    int lightIndex = 0;  /* LED slot in the keymap/RGB banks (0..143) */
     int row = 0, col = 0;
-    QRect rect;          /* position dans le rendu 800x300 */
+    QRect rect;          /* position in the 800x300 rendering */
     bool fnLayerDisable = false;
 };
 

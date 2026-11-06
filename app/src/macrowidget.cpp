@@ -1,4 +1,5 @@
 #include "macrowidget.h"
+#include "hidworker.h"
 #include "keycodes.h"
 
 #include <QFormLayout>
@@ -182,24 +183,32 @@ void MacroWidget::sendMacros() {
     bool ok = false;
     QVector<uint8_t> payload = st->encodeMacroPayload(&ok);
     if (!ok) {
-        m_status->setText("Macro space exceeded (3072 bytes).");
+        m_status->setText(tr("Macro space exceeded (3072 bytes)."));
         m_status->setStyleSheet("color:#e07070;");
         return;
     }
-    Device *d = Device::instance();
-    if (!d->openMacroSession()) {
-        m_status->setText(QString("Error: %1").arg(d->lastError()));
-        m_status->setStyleSheet("color:#e07070;");
-        return;
-    }
-    int blocks = (qMax(payload.size(), 400) + 63) / 64;
-    if (d->writeMacroPayload(payload, blocks)) {
-        m_status->setText(QString("Macros written (%1 bytes).").arg(payload.size()));
-        m_status->setStyleSheet("color:#7ec97e;");
-    } else {
-        m_status->setText(QString("Error: %1").arg(d->lastError()));
-        m_status->setStyleSheet("color:#e07070;");
-    }
+    m_send->setEnabled(false);
+    m_status->setText(tr("Writing macros…"));
+    m_status->setStyleSheet(QString());
+    const int size = payload.size();
+    const int blocks = (qMax(size, 400) + 63) / 64;
+    /* Whole 3-step session (open → payload → commit/finish, see device.cpp)
+       runs as one job on the HID thread; the GUI only sees the completion. */
+    HidWorker::run(this,
+        [payload, blocks](Device *dev) {
+            if (!dev->openMacroSession()) return false;
+            return dev->writeMacroPayload(payload, blocks);
+        },
+        [this, size](bool ok, QString err) {
+            m_send->setEnabled(true);
+            if (ok) {
+                m_status->setText(tr("Macros written (%1 bytes).").arg(size));
+                m_status->setStyleSheet("color:#7ec97e;");
+            } else {
+                m_status->setText(tr("Error: %1").arg(err));
+                m_status->setStyleSheet("color:#e07070;");
+            }
+        });
 }
 
 } /* namespace ak820 */

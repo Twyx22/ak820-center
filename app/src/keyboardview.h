@@ -41,6 +41,8 @@ protected:
     void paintEvent(QPaintEvent *) override;
     void mousePressEvent(QMouseEvent *ev) override;
     void mouseMoveEvent(QMouseEvent *ev) override;
+    void leaveEvent(QEvent *ev) override;
+    QSize sizeHint() const override;
 
 private:
     const Layout *m_layout = nullptr;
@@ -49,6 +51,7 @@ private:
     QHash<int, QColor> m_colors;
     QSet<int> m_selectedSet;
     int m_selected = -1;
+    int m_hovered = -1;
     int hitTest(const QPoint &pos) const;
 };
 

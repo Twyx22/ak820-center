@@ -1,5 +1,8 @@
 /*
- * device.cpp — AK820 Pro legacy protocol implementation (see PROTOCOL.md)
+ * device.cpp — AK820 Pro legacy protocol implementation (see ../PROTOCOL.md).
+ * T1: 65-byte feature reports on the wired 0xFF13 interface.
+ * T2: 33-byte output/input reports with checksum on the 2.4G dongle 0xFF60
+ *     interface (EXPERIMENTAL, pending hardware validation).
  */
 #include "device.h"
 
@@ -11,8 +14,11 @@ namespace ak820 {
 
 static const uint16_t PIDS[] = { 0x8009, 0x800A };
 static constexpr uint16_t VID = 0x0C45;
+static constexpr uint16_t PID_DONGLE = 0xFDFD;
 static constexpr int USAGE_PAGE_CONTROL = 0xFF13;
-static constexpr int CMD_DELAY_MS = 35;   /* cmd_delaytime du config.xml officiel */
+static constexpr int USAGE_PAGE_DONGLE = 0xFF60;
+static constexpr int DONGLE_CONFIG_IFACE = 3;   /* MI_03 preferred */
+static constexpr int CMD_DELAY_MS = 35;   /* cmd_delaytime from the official config.xml */
 static constexpr int READ_DELAY_MS = 50;
 
 static constexpr uint8_t CMD_COMMIT = 0x02;
@@ -28,6 +34,17 @@ static constexpr uint8_t CMD_CLOCK = 0x28;
 static constexpr uint8_t CMD_RGB_READ = 0xF5;
 static constexpr uint8_t CMD_FINISH = 0xF0;
 
+/* T2 (dongle) command bytes and framing — see PROTOCOL.md "T2 commands". */
+static constexpr uint8_t T2_CMD_REALTIME_LIGHT = 0x14;
+static constexpr uint8_t T2_KEY_LAYER_BASE = 0x03;
+static constexpr uint8_t T2_KEY_LAYER_FN = 0x0D;
+static constexpr int T2_CHECKSUM_OFFSET = 8;    /* FUN_0044f5f0 */
+static constexpr int T2_RETRIES = 20;
+static constexpr int T2_RETRY_DELAY_MS = 10;
+static constexpr int T2_PARAM_COUNT = 21;       /* 144-LED layout: 21 params */
+static constexpr int T2_PARAM_SIZE = 28;        /* 28 bytes each... */
+static constexpr int T2_PARAM_LAST_SIZE = 16;   /* ...16 bytes for the last one */
+
 Device *Device::instance() {
     static Device s_instance;
     return &s_instance;
@@ -36,11 +53,24 @@ Device *Device::instance() {
 Device::Device() = default;
 Device::~Device() { disconnectKeyboard(); }
 
+ConnectionKind Device::connectionKind() const {
+    if (m_dongle) return ConnectionKind::Dongle;
+    if (m_dev) return ConnectionKind::Wired;
+    return ConnectionKind::None;
+}
+
 void Device::disconnectKeyboard() {
     QMutexLocker lock(&m_mutex);
+    const bool wasConnected = m_dev || m_dongle;
     if (m_dev) {
         hid_close((hid_device *)m_dev);
         m_dev = nullptr;
+    }
+    if (m_dongle) {
+        hid_close((hid_device *)m_dongle);
+        m_dongle = nullptr;
+    }
+    if (wasConnected) {
         m_path.clear();
         emit connectedChanged(false);
     }
@@ -77,9 +107,44 @@ bool Device::connectLocked() {
 
 bool Device::connectKeyboard() {
     QMutexLocker lock(&m_mutex);
-    bool ok = connectLocked();
-    if (ok) emit connectedChanged(true);
-    return ok;
+    return connectLocked(); /* connectLocked() already emits connectedChanged(true) */
+}
+
+bool Device::connectDongle() {
+    QMutexLocker lock(&m_mutex);
+    return connectDongleLocked();
+}
+
+bool Device::connectDongleLocked() {
+    /* EXPERIMENTAL, pending hardware validation — see PROTOCOL.md "2.4G dongle".
+       The dongle exposes no feature reports: MI_03 (preferred) carries
+       32-byte output/input reports used by the T2 command transport. */
+    if (m_dongle) return true;
+    if (hid_init() < 0) {
+        m_error = QStringLiteral("hid_init failed");
+        return false;
+    }
+    struct hid_device_info *list = hid_enumerate(VID, PID_DONGLE), *it;
+    /* Pass 1: the MI_03 config interface; pass 2: any 0xFF60 interface. */
+    for (int pass = 0; pass < 2 && !m_dongle; pass++) {
+        for (it = list; it; it = it->next) {
+            if (it->usage_page != USAGE_PAGE_DONGLE) continue;
+            if (pass == 0 && it->interface_number != DONGLE_CONFIG_IFACE) continue;
+            hid_device *dev = hid_open_path(it->path);
+            if (!dev) continue;
+            m_dongle = dev;
+            m_path = QString::fromUtf8(it->path);
+            break;
+        }
+    }
+    hid_free_enumeration(list);
+    if (m_dongle) {
+        emit connectedChanged(true);
+        return true;
+    }
+    m_error = QStringLiteral("2.4G dongle not found (interface 0xFF60).");
+    hid_exit();
+    return false;
 }
 
 bool Device::exchange(Packet &pkt) {
@@ -103,6 +168,46 @@ bool Device::exchange(Packet &pkt) {
     }
     memcpy(pkt.data(), resp + 1, PACKET_LEN);
     return true;
+}
+
+bool Device::t2Exchange(T2Packet &pkt) {
+    /* EXPERIMENTAL, pending hardware validation — T2 transport (FUN_0044f5f0).
+       pkt is [report ID 0][32-byte payload]; the checksum is the byte sum of
+       the prepared 65-byte buffer (checksum field zeroed during the sum),
+       stored at byte 8. The packet goes out as a 33-byte output report;
+       the reply is validated by its bytes 1..3 echoing the request, with
+       20 retries and 10 ms sleeps. */
+    if (!m_dongle) {
+        m_error = QStringLiteral("not connected (2.4G dongle required)");
+        return false;
+    }
+    unsigned char prepared[65] = { 0 };
+    memcpy(prepared, pkt.data(), T2_PACKET_LEN);
+    prepared[T2_CHECKSUM_OFFSET] = 0;
+    uint8_t sum = 0;
+    for (int i = 0; i < 65; i++) sum = (uint8_t)(sum + prepared[i]);
+    pkt[T2_CHECKSUM_OFFSET] = sum;
+
+    /* One write retry after 10 ms, like FUN_0044f5f0. */
+    if (hid_write((hid_device *)m_dongle, pkt.data(), T2_PACKET_LEN) < 0) {
+        QThread::msleep(10);
+        if (hid_write((hid_device *)m_dongle, pkt.data(), T2_PACKET_LEN) < 0) {
+            m_error = QString::fromWCharArray(hid_error((hid_device *)m_dongle));
+            return false;
+        }
+    }
+    QThread::msleep(5);
+    for (int attempt = 0; attempt < T2_RETRIES; attempt++) {
+        unsigned char resp[T2_PACKET_LEN] = { 0 };
+        int n = hid_read_timeout((hid_device *)m_dongle, resp, T2_PACKET_LEN, 50);
+        if (n >= 4 && resp[1] == pkt[1] && resp[2] == pkt[2] && resp[3] == pkt[3]) {
+            memcpy(pkt.data(), resp, T2_PACKET_LEN);
+            return true;
+        }
+        QThread::msleep(T2_RETRY_DELAY_MS);
+    }
+    m_error = QStringLiteral("No valid dongle reply after %1 retries").arg(T2_RETRIES);
+    return false;
 }
 
 static void ctrlPkt(Packet &p, uint8_t cmd, uint8_t sub, uint16_t value) {
@@ -208,7 +313,7 @@ bool Device::setLighting(const LightingConfig &cfg) {
     d[9] = cfg.brightness;
     d[10] = cfg.speed;
     d[11] = cfg.direction;
-    /* Trailer du driver officiel : AA 55 (0x55aa LE) — 0x42b100/0x434090. */
+    /* Official driver trailer: AA 55 (0x55aa LE) — 0x42b100/0x434090. */
     d[14] = 0xAA; d[15] = 0x55;
     return writeSetting(CMD_LED_EFFECT, 0, 1, &d);
 }
@@ -239,7 +344,7 @@ bool Device::syncClock() {
 }
 
 bool Device::writeKeymapLayer(int layer, const std::array<KeyAction, LED_COUNT> &keySlots) {
-    /* 576 o : 144 slots de 4 o [page, p1, p2, p3] (FUN_00418420), trailer AA 55. */
+    /* 576 bytes: 144 slots of 4 bytes [page, p1, p2, p3] (FUN_00418420), AA 55 trailer. */
     static uint8_t buf[PACKET_LEN * 9];
     memset(buf, 0, sizeof buf);
     for (int i = 0; i < LED_COUNT; i++) {
@@ -266,6 +371,24 @@ bool Device::writeKeymapLayer(int layer, const std::array<KeyAction, LED_COUNT> 
     if (!commit()) { finishSession(1); return false; }
     if (!finishSession(1)) return false;
     return true;
+}
+
+bool Device::writeKeySlot(int layer, int slot, const KeyAction &a) {
+    /* EXPERIMENTAL, pending hardware validation — single-key write over the
+       dongle T2 transport: [00 03|0D 04 <slot> <page p1 p2 p3> <csum>]
+       (03 = base layer, 0D = Fn layer). */
+    QMutexLocker lock(&m_mutex);
+    if (!m_dongle && !connectDongleLocked()) return false;
+    T2Packet pkt;
+    pkt.fill(0);
+    pkt[1] = layer == 0 ? T2_KEY_LAYER_BASE : T2_KEY_LAYER_FN;
+    pkt[2] = 0x04;
+    pkt[3] = (uint8_t)slot;
+    pkt[4] = a.page;
+    pkt[5] = a.p1;
+    pkt[6] = a.p2;
+    pkt[7] = a.p3;
+    return t2Exchange(pkt);
 }
 
 bool Device::writeCustomRgb(const std::array<uint8_t, LED_COUNT * 3> &rgb) {
@@ -296,14 +419,43 @@ bool Device::writeCustomRgb(const std::array<uint8_t, LED_COUNT * 3> &rgb) {
     return true;
 }
 
+bool Device::pushRealtimeFrame(const uint8_t *rgb) {
+    /* EXPERIMENTAL, pending hardware validation — official "Real-time
+       Lighting" feature (language key 55), RGB path of the decompiled apply
+       (FUN_0044c000): T2 cmd 0x14 writes 21 parameters of 28 bytes (the
+       21st carries only 16) — [report ID 0, 0x14, <size>, <idx>, <28 bytes
+       of [id, r, g, b] LED data>] — covering 144 LEDs (144 x 4 = 576 B). */
+    QMutexLocker lock(&m_mutex);
+    if (!m_dongle && !connectDongleLocked()) return false;
+    uint8_t frame[LED_COUNT * 4];
+    for (int i = 0; i < LED_COUNT; i++) {
+        frame[i * 4 + 0] = (uint8_t)i;
+        frame[i * 4 + 1] = rgb[i * 3 + 0];
+        frame[i * 4 + 2] = rgb[i * 3 + 1];
+        frame[i * 4 + 3] = rgb[i * 3 + 2];
+    }
+    for (int idx = 0; idx < T2_PARAM_COUNT; idx++) {
+        const int size = idx == T2_PARAM_COUNT - 1 ? T2_PARAM_LAST_SIZE : T2_PARAM_SIZE;
+        T2Packet pkt;
+        pkt.fill(0);
+        pkt[1] = T2_CMD_REALTIME_LIGHT;
+        pkt[2] = (uint8_t)size;
+        pkt[3] = (uint8_t)idx;
+        memcpy(pkt.data() + 4, frame + idx * T2_PARAM_SIZE, size);
+        if (!t2Exchange(pkt)) return false;
+        QThread::msleep(2); /* Sleep(2) between parameters */
+    }
+    return true;
+}
+
 bool Device::readCustomRgb(std::array<uint8_t, LED_COUNT * 3> &rgb) {
     QMutexLocker lock(&m_mutex);
     if (!connectLocked()) return false;
     Packet p;
     p.fill(0);
-    p[0] = 4; p[1] = CMD_RGB_READ; p[8] = 9; /* 9 blocs pour 144 LED */
+    p[0] = 4; p[1] = CMD_RGB_READ; p[8] = 9; /* 9 blocks for 144 LEDs */
     if (!exchange(p)) return false;
-    /* Le 1er bloc arrive dans p ; la suite se lit en feature reports 65 o. */
+    /* The 1st block arrives in p; the rest is read as 65-byte feature reports. */
     memcpy(rgb.data(), p.data() + 1, PACKET_LEN - 1 > LED_COUNT * 3
                ? LED_COUNT * 3 : PACKET_LEN - 1);
     for (int b = 1; b < 9; b++) {
@@ -402,8 +554,33 @@ void Device::abortSession(uint16_t flag) {
     exchange(p);
 }
 
+BatteryStatus Device::batteryDongle() {
+    /* The dongle has no feature reports: the T1 battery request [20 01] goes
+       out as a raw 33-byte output report ([report ID 0][20 01][zeros]),
+       answered by an input report [20 01 00 pct] (FF = wired full).
+       No 04 prefix, exactly like the wired T1 request (PROTOCOL.md). */
+    BatteryStatus st;
+    unsigned char wire[T2_PACKET_LEN] = { 0 };
+    unsigned char resp[T2_PACKET_LEN] = { 0 };
+    wire[1] = 0x20; wire[2] = 0x01;
+    QThread::msleep(CMD_DELAY_MS);
+    if (hid_write((hid_device *)m_dongle, wire, T2_PACKET_LEN) < 0) {
+        m_error = QString::fromWCharArray(hid_error((hid_device *)m_dongle));
+        return st;
+    }
+    QThread::msleep(READ_DELAY_MS);
+    int n = hid_read_timeout((hid_device *)m_dongle, resp, T2_PACKET_LEN, 1000);
+    if (n >= 5 && resp[1] == 0x20 && resp[2] == 0x01) {
+        st.valid = true;
+        if (resp[4] == 0xFF) { st.wiredFull = true; st.percent = 100; }
+        else if (resp[4] <= 100) st.percent = resp[4];
+    }
+    return st;
+}
+
 BatteryStatus Device::battery() {
     QMutexLocker lock(&m_mutex);
+    if (m_dongle) return batteryDongle();
     BatteryStatus st;
     if (!connectLocked()) return st;
     unsigned char wire[65] = { 0 };

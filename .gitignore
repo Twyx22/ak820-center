@@ -14,8 +14,10 @@
 !/docs/
 
 # build artifacts
-app/build/
+app/build*/
 out/
+packaging/pkg/
+packaging/src/
 tools/ak820ctl
 tools/tftdesc
 tools/dongledesc

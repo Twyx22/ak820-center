@@ -31,7 +31,7 @@ static void msleep(int ms) {
 }
 
 static void dump(const char *tag, const unsigned char *p, int n) {
-    printf("%s (%d o):", tag, n);
+    printf("%s (%d bytes):", tag, n);
     for (int i = 0; i < n; i++) {
         if (i % 16 == 0) printf("\n  %02x:", i);
         printf(" %02x", p[i]);
@@ -75,7 +75,7 @@ static hid_device *open_keyboard(void) {
     for (unsigned i = 0; i < sizeof pids / sizeof *pids && !dev; i++)
         dev = open_control(pids[i]);
     if (!dev)
-        fprintf(stderr, "clavier (interface 0xFF13) introuvable — brancher en filaire ?\n");
+        fprintf(stderr, "keyboard (interface 0xFF13) not found — plug the USB-C cable?\n");
     return dev;
 }
 
@@ -95,7 +95,7 @@ static hid_device *open_dongle(void) {
     }
     hid_free_enumeration(list);
     if (!dev)
-        fprintf(stderr, "dongle 2.4G (interface 0xFF60) introuvable\n");
+        fprintf(stderr, "2.4G dongle (interface 0xFF60) not found\n");
     return dev;
 }
 
@@ -156,7 +156,7 @@ static int finish(hid_device *dev, unsigned short flag) {
     ctrl_pkt(p, 0xF0, 0, flag);
     exchange(dev, p);
     if (!ack_ok(p, 0xF0)) {
-        fprintf(stderr, "FINISH: status %02x (attendu 01)\n", p[3]);
+        fprintf(stderr, "FINISH: status %02x (expected 01)\n", p[3]);
         return -1;
     }
     return 0;
@@ -199,12 +199,12 @@ static int cmd_battery(int via_dongle) {
     msleep(50);
     int n = hid_get_feature_report(dev, resp, 65);
     if (n >= 5 && resp[1] == 0x20 && resp[2] == 0x01) {
-        if (resp[4] == 0xFF) printf("batterie: filaire (pleine)\n");
-        else if (resp[4] <= 100) printf("batterie: %d%%\n", resp[4]);
-        else printf("batterie: valeur inattendue %02x\n", resp[4]);
+        if (resp[4] == 0xFF) printf("battery: wired (full)\n");
+        else if (resp[4] <= 100) printf("battery: %d%%\n", resp[4]);
+        else printf("battery: unexpected value %02x\n", resp[4]);
     } else {
-        printf("pas de lecture batterie (n=%d)\n", n);
-        dump("rep", resp, n > 0 ? n : 0);
+        printf("no battery reading (n=%d)\n", n);
+        dump("reply", resp, n > 0 ? n : 0);
     }
     hid_close(dev);
     hid_exit();
@@ -263,9 +263,9 @@ static void build_light(unsigned char p[PKT], const void *ctx) {
     memset(p, 0, PKT);
     p[0] = a[0];
     p[1] = a[1]; p[2] = a[2]; p[3] = a[3];
-    p[8] = a[7]; /* colorful : 0 statique, 1 rainbow, 2 reverse */
+    p[8] = a[7]; /* colorful: 0 fixed, 1 rainbow, 2 reversed */
     p[9] = a[4]; p[10] = a[5]; p[11] = a[6];
-    p[14] = 0xAA; p[15] = 0x55; /* trailer du driver officiel */
+    p[14] = 0xAA; p[15] = 0x55; /* official driver trailer */
 }
 
 static int cmd_readrgb(int blocks) {
@@ -276,19 +276,19 @@ static int cmd_readrgb(int blocks) {
     memset(p, 0, PKT);
     p[0] = 4; p[1] = 0xF5; p[8] = (unsigned char)clampi(blocks, 1, 9);
     if (exchange(dev, p) >= 0)
-        dump("04 F5 rep (bloc 1)", p, PKT);
+        dump("04 F5 reply (block 1)", p, PKT);
     hid_close(dev);
     hid_exit();
     return 0;
 }
 
-/* Trame de test TFT : 2 frames (rouge, bleue) 128×128 RGB565 LE. */
+/* TFT test frame: 2 frames (red, blue) 128x128 RGB565 LE. */
 static int cmd_tfttest(int slot) {
     hid_init();
     hid_device *dev = open_keyboard();
     if (!dev) { hid_exit(); return 1; }
 
-    /* payload = header 256 o + 2 frames de 32768 o, pad FF au multiple de 4096 */
+    /* payload = 256-byte header + 2 frames of 32768 bytes, FF pad to a 4096 multiple */
     int frames = 2, frame_bytes = 128 * 128 * 2;
     int payload_len = 256 + frames * frame_bytes;
     int chunks = (payload_len + TFT_CHUNK - 1) / TFT_CHUNK;
@@ -300,7 +300,7 @@ static int cmd_tfttest(int slot) {
     payload[1] = 100 / 2;      /* frame 0 delay: 100 ms */
     payload[2] = 100 / 2;      /* frame 1 delay */
     payload[3] = 0x00;
-    /* frame 0 : rouge 0xF800, frame 1 : bleu 0x001F (RGB565 LE) */
+    /* frame 0: red 0xF800, frame 1: blue 0x001F (RGB565 LE) */
     for (int f = 0; f < frames; f++) {
         unsigned int px = (f == 0) ? 0xF800u : 0x001Fu;
         unsigned char lo = px & 0xff, hi = px >> 8;
@@ -308,7 +308,7 @@ static int cmd_tfttest(int slot) {
         for (int i = 0; i < frame_bytes; i += 2) { dst[i] = lo; dst[i + 1] = hi; }
     }
 
-    /* interface TFT (FF68 d'abord, puis FF67) */
+    /* TFT interface (FF68 first, then FF67) */
     hid_device *tft = NULL;
     const unsigned short pages[] = { 0xFF68, 0xFF67 };
     for (unsigned pg = 0; pg < sizeof pages / sizeof *pages && !tft; pg++) {
@@ -318,7 +318,7 @@ static int cmd_tfttest(int slot) {
         }
         hid_free_enumeration(list);
     }
-    if (!tft) { fprintf(stderr, "interface TFT introuvable\n"); free(payload); hid_close(dev); hid_exit(); return 1; }
+    if (!tft) { fprintf(stderr, "TFT interface not found\n"); free(payload); hid_close(dev); hid_exit(); return 1; }
 
     /* verify the descriptor (official driver safeguard) */
     unsigned char desc[512] = { 0 };
@@ -342,7 +342,7 @@ static int cmd_tfttest(int slot) {
         fprintf(stderr, "04 72 rejected (status %02x)\n", p[3]);
         goto fail;
     }
-    printf("04 72 ack — envoi de %d blocs de 4096 o…\n", chunks);
+    printf("04 72 ack — sending %d 4096-byte blocks...\n", chunks);
     for (int i = 0; i < chunks; i++) {
         unsigned char rep[TFT_CHUNK + 1] = { 0 };
         memcpy(rep + 1, payload + i * TFT_CHUNK, TFT_CHUNK);
@@ -353,10 +353,10 @@ static int cmd_tfttest(int slot) {
         unsigned char ack[64];
         int n = hid_read_timeout(tft, ack, sizeof ack, 1000);
         if (n <= 0) {
-            fprintf(stderr, "pas d'ack pour le chunk %d/%d\n", i + 1, chunks);
+            fprintf(stderr, "no ack for chunk %d/%d\n", i + 1, chunks);
             goto fail;
         }
-        printf("  chunk %d/%d ack (%d o)\n", i + 1, chunks, n);
+        printf("  chunk %d/%d ack (%d bytes)\n", i + 1, chunks, n);
     }
     ctrl_pkt(p, 0x02, 0, 0);
     exchange(dev, p);
@@ -432,7 +432,7 @@ int main(int argc, char **argv) {
     }
     if (!strcmp(argv[1], "sleep") && argc > 2) {
         int code;
-        if (!parse_int(argv[2], 10, 0, 3, &code)) { fprintf(stderr, "code veille: 0|1|2|3\n"); return 2; }
+        if (!parse_int(argv[2], 10, 0, 3, &code)) { fprintf(stderr, "sleep code: 0|1|2|3\n"); return 2; }
         return run_session(0x17, 1, 1, build_sleep, &code);
     }
     if (!strcmp(argv[1], "light") && argc > 3) {
@@ -443,7 +443,7 @@ int main(int argc, char **argv) {
         if (ok && argc > 5) ok = parse_int(argv[5], 10, 0, 5, &speed);
         if (ok && argc > 6) ok = parse_int(argv[6], 10, 0, 3, &dir);
         if (ok && argc > 7) ok = parse_int(argv[7], 10, 0, 1, &rain);
-        if (!ok) { fprintf(stderr, "arguments light invalides\n"); return 2; }
+        if (!ok) { fprintf(stderr, "invalid light arguments\n"); return 2; }
         a[0] = (unsigned char)mode;
         a[1] = (unsigned char)r;
         a[2] = (unsigned char)g;
@@ -460,7 +460,7 @@ int main(int argc, char **argv) {
     }
     if (!strcmp(argv[1], "readrgb") && argc > 2) {
         int blocks;
-        if (!parse_int(argv[2], 10, 1, 9, &blocks)) { fprintf(stderr, "blocs: 1..9\n"); return 2; }
+        if (!parse_int(argv[2], 10, 1, 9, &blocks)) { fprintf(stderr, "blocks: 1..9\n"); return 2; }
         return cmd_readrgb(blocks);
     }
     if (!strcmp(argv[1], "tfttest")) {
@@ -468,6 +468,6 @@ int main(int argc, char **argv) {
         if (argc > 2 && !parse_int(argv[2], 10, 1, 3, &slot)) { fprintf(stderr, "slot: 1..3\n"); return 2; }
         return cmd_tfttest(slot);
     }
-    fprintf(stderr, "commande inconnue\n");
+    fprintf(stderr, "unknown command\n");
     return 2;
 }
