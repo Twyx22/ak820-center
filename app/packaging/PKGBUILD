@@ -1,7 +1,7 @@
 # Maintainer: AK820 decomp project
 # Reconstruit depuis la décompilation de l'app officielle AJAZZ AK820 Pro 1.0.0.5
 pkgname=ak820-center
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=1
 pkgdesc="Configuration native Linux du clavier AJAZZ AK820 Pro (éclairage, remap, RGB, macros, écran TFT)"
 arch=('x86_64')

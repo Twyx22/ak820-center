@@ -2,7 +2,7 @@
 # Native Linux configuration app for the AJAZZ AK820 Pro keyboard.
 # Build from the packaging/ directory of the repo: makepkg -si
 pkgname=ak820-center
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=1
 pkgdesc="Native Linux configuration app for the AJAZZ AK820 Pro keyboard (lighting, remap, RGB, macros, TFT)"
 arch=('x86_64')
