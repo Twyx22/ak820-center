@@ -1,21 +1,21 @@
-# AK820 Center — app Linux native pour le clavier AJAZZ AK820 Pro
+# AK820 Center — native Linux app for the AJAZZ AK820 Pro keyboard
 
-Réimplémentation open-source, compilée nativement pour Linux, de l'app
-Windows officielle AJAZZ AK820 Pro (V1.0.0.5, décompilée — voir
+Open-source reimplementation, compiled natively for Linux, of the official
+AJAZZ AK820 Pro Windows app (V1.0.0.5, decompiled — see
 [`../PROTOCOL.md`](../PROTOCOL.md)).
 
-## Fonctionnalités
+## Features
 
-| Onglet | Contenu |
+| Tab | Content |
 |---|---|
-| Éclairage | 20 effets embarqués + couleur + arc-en-ciel, luminosité/vitesse (0-5), direction (← ↓ ↑ →) |
-| Touches | Remap couche **base** et couche **Fn** : défaut, désactivée, clavier+modificateurs, multimédia, souris, macro |
-| RGB personnalisé | Peinture touche par touche (144 LED), lecture/écriture de la banque |
-| Macros | Jusqu'à 100 macros (index 400 o + blocs, budget 3072 o firmware) |
-| Écran TFT | Import GIF/images → RGB565 128×128, chunks 4096 o, slots 1-3 |
-| Réglages | Veille (jamais/1/5/30 min), synchro horloge, batterie |
+| Lighting | 20 onboard effects + color + rainbow, brightness/speed (0-5), direction (← ↓ ↑ →) |
+| Keys | Remap **base** layer and **Fn** layer: default, disabled, keyboard+modifiers, media, mouse, macro |
+| Custom RGB | Per-key painting (144 LEDs), read/write of the stored bank |
+| Macros | Up to 100 macros (400-byte index + blocks, 3072-byte firmware budget) |
+| TFT screen | GIF/image import → RGB565 128×128, 4096-byte chunks, slots 1-3 |
+| Settings | Sleep (never/1/5/30 min), clock sync, battery |
 
-## Compilation
+## Build
 
 ```bash
 sudo pacman -S --needed qt6-base hidapi cmake gcc
@@ -23,46 +23,46 @@ cmake -S app -B app/build -DCMAKE_BUILD_TYPE=Release
 cmake --build app/build -j$(nproc)
 ```
 
-## Installation manuelle
+## Manual install
 
 ```bash
 sudo install -Dm755 app/build/ak820-center /usr/local/bin/ak820-center
 sudo install -Dm644 extracted/app/layouts/rgb-keyboard.xml /usr/share/ak820-center/rgb-keyboard.xml
 sudo install -Dm644 extracted/app/skins/theme1/logo/logo.png /usr/share/ak820-center/icon.png
 sudo install -Dm644 app/packaging/ak820-center.desktop /usr/share/applications/
-# permissions HID (obligatoire) :
+# HID permissions (required):
 sudo cp app/packaging/99-ajazz-ak820pro.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
-# puis : reconnexion de session OU usermod -aG input $USER
+# then: re-login OR usermod -aG input $USER
 ```
 
-## Paquet Arch (PKGBUILD)
+## Arch package (PKGBUILD)
 
 ```bash
 cd app/packaging && makepkg -si
 ```
 
-## Outil CLI de test
+## CLI test tool
 
-`tools/ak820ctl` (voir sources) : `probe`, `battery [dongle]`, `clock`,
+`tools/ak820ctl` (see sources): `probe`, `battery [dongle]`, `clock`,
 `sleep 0-3`, `light <mode> <rrggbb> [bright] [speed] [dir] [rainbow]`,
 `readrgb 3|9`.
 
-## Protocole
+## Protocol
 
-Uniquement le mode **filaire** (USB-C) : interface vendor usage page `0xFF13`,
-rapports feature 65 octets, transactions `START 04 18 → cmd → COMMIT 04 02 →
-FINISH 04 F0` avec 35 ms entre écritures. Détails complets dans
-[`../PROTOCOL.md`](../PROTOCOL.md). Le clavier ne fournit pas la lecture du
-keymap/macros : l'état est persisté côté application
-(`~/.config/ak820-center/state.json`), comme le fait l'app officielle avec
-son `config.xml`.
+**Wired (USB-C) mode only**: vendor interface usage page `0xFF13`,
+65-byte feature reports, transactions `START 04 18 → cmd → COMMIT 04 02 →
+FINISH 04 F0` with 35 ms between writes. Full details in
+[`../PROTOCOL.md`](../PROTOCOL.md). The keyboard does not expose keymap/macro
+reads: state is persisted client-side
+(`~/.config/ak820-center/state.json`), exactly like the official app keeps
+its `config.xml`.
 
-## État / limites connues
+## Status / known limitations
 
-- Le mode dongle 2.4G expose une interface vendor différente (`0xFF60`) :
-  éclairage/remap via le dongle est **non encore vérifié** sur matériel.
-- Certaines sous-valeurs (souris p1/p2, pages étendues 0x07) restent à
-  confirmer matériellement — tables isolées dans `keymapwidget.cpp`.
-- Écran TFT : le nombre de frames legacy vérifié est ≤ 30 (l'app officielle
-  annonce 140 ; le header de 256 o du config.xml est implémenté).
+- The 2.4G dongle mode exposes a different vendor interface (`0xFF60`):
+  lighting/remap over the dongle is **not yet hardware-verified**.
+- Some sub-values (mouse p1/p2, extended pages 0x07) still need hardware
+  confirmation — tables isolated in `keymapwidget.cpp`.
+- TFT screen: the number of legacy frames verified is ≤ 30 (the official app
+  advertises 140; the 256-byte config.xml header is implemented).
