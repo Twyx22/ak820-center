@@ -28,7 +28,7 @@ private:
     QComboBox *m_colorful = nullptr;
     QSlider *m_bright = nullptr;
     QSlider *m_speed = nullptr;
-    QSlider *m_dir = nullptr;
+    QComboBox *m_dir = nullptr;
     QPushButton *m_apply = nullptr;
     QLabel *m_status = nullptr;
     QColor m_color{0, 120, 255};

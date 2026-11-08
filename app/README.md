@@ -8,7 +8,7 @@ Windows officielle AJAZZ AK820 Pro (V1.0.0.5, décompilée — voir
 
 | Onglet | Contenu |
 |---|---|
-| Éclairage | 20 effets embarqués + couleur + arc-en-ciel, luminosité/vitesse/direction (0-5) |
+| Éclairage | 20 effets embarqués + couleur + arc-en-ciel, luminosité/vitesse (0-5), direction (← ↓ ↑ →) |
 | Touches | Remap couche **base** et couche **Fn** : défaut, désactivée, clavier+modificateurs, multimédia, souris, macro |
 | RGB personnalisé | Peinture touche par touche (144 LED), lecture/écriture de la banque |
 | Macros | Jusqu'à 100 macros (index 400 o + blocs, budget 3072 o firmware) |

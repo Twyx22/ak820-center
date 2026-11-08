@@ -97,10 +97,14 @@ LightingWidget::LightingWidget(QWidget *parent) : QWidget(parent) {
     m_speed->setTickPosition(QSlider::TicksBelow);
     par->addRow("Speed (0-5)", m_speed);
 
-    m_dir = new QSlider(Qt::Horizontal);
-    m_dir->setRange(0, 3); m_dir->setValue(0);
-    m_dir->setPageStep(1);
-    par->addRow("Direction (Left/Down/Up/Right)", m_dir);
+    /* protocol: 0=L 1=D 2=U 3=R — explicit combo, the old 0..3 slider gave
+       no clue which handle position meant which direction */
+    m_dir = new QComboBox;
+    m_dir->addItem("Left  \xe2\x86\x90", 0);
+    m_dir->addItem("Down  \xe2\x86\x93", 1);
+    m_dir->addItem("Up  \xe2\x86\x91", 2);
+    m_dir->addItem("Right  \xe2\x86\x92", 3);
+    par->addRow("Direction", m_dir);
     root->addWidget(parBox);
 
     auto *bottom = new QHBoxLayout;
@@ -137,7 +141,7 @@ void LightingWidget::apply() {
     cfg.colorful = (uint8_t)m_colorful->currentData().toInt();
     cfg.brightness = (uint8_t)m_bright->value();
     cfg.speed = (uint8_t)m_speed->value();
-    cfg.direction = (uint8_t)m_dir->value();
+    cfg.direction = (uint8_t)m_dir->currentData().toInt();
     if (Device::instance()->setLighting(cfg))
         m_status->setText("Applied.");
     else
