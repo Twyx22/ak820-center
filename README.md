@@ -91,6 +91,11 @@ Then re-login (or add yourself to the `input` group) so the rule applies.
 cd packaging && makepkg -si
 ```
 
+Prebuilt package (no AUR account needed): download
+`ak820-center-<ver>-x86_64.pkg.tar.zst` from the
+[releases](https://github.com/Twyx22/ak820-center/releases), then
+`sudo pacman -U ak820-center-<ver>-x86_64.pkg.tar.zst`.
+
 ## CLI tool
 
 A small standalone test tool is included (`tools/ak820ctl.c`):
