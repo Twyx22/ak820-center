@@ -1,6 +1,6 @@
 # Maintainer: Twyx22
 # Native Linux configuration app for the AJAZZ AK820 Pro keyboard.
-# Build from the packaging/ directory of the repo: makepkg -si
+# Works locally (cd packaging && makepkg -si) and on the AUR.
 pkgname=ak820-center
 pkgver=1.0.1
 pkgrel=1
@@ -10,21 +10,26 @@ url="https://github.com/Twyx22/ak820-center"
 license=('MIT')
 depends=('qt6-base' 'hidapi')
 makedepends=('cmake' 'gcc')
-source=()
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Twyx22/ak820-center/archive/refs/tags/v$pkgver.tar.gz"
+        "icon.png::https://raw.githubusercontent.com/Twyx22/ak820-center/6a0722bed8dcc6d98710ce7d6dd84f053cef2b70/packaging/icon.png")
+sha256sums=('07691a3c3b9d3fc048a2ac59f6b9f549241543ea9d0e3d082107bec6ccfbc5b5'
+            'e964ba98b9dc20d0029f64874f06282f60ea57e76512b08ae5895dd28d527777')
 options=(!strip)
 
 build() {
-  cmake -S "$startdir/../src" -B "$srcdir/build" -DCMAKE_BUILD_TYPE=Release
+  cmake -S "$srcdir/$pkgname-$pkgver/app" -B "$srcdir/build" -DCMAKE_BUILD_TYPE=Release
   cmake --build "$srcdir/build" -j"$(nproc)"
 }
 
 package() {
   install -Dm755 "$srcdir/build/ak820-center" "$pkgdir/usr/bin/ak820-center"
-  install -Dm644 "$startdir/../resources/rgb-keyboard.xml" \
-    "$pkgdir/usr/share/ak820-center/rgb-keyboard.xml"
-  install -Dm644 "$startdir/../packaging/ak820-center.desktop" \
+  install -Dm644 "$srcdir/$pkgname-$pkgver/resources/rgb-keyboard.xml" \
+    "$pkgdir/usr/share/$pkgname/rgb-keyboard.xml"
+  install -Dm644 "$srcdir/icon.png" "$pkgdir/usr/share/$pkgname/icon.png"
+  install -Dm644 "$srcdir/$pkgname-$pkgver/packaging/ak820-center.desktop" \
     "$pkgdir/usr/share/applications/ak820-center.desktop"
-  install -Dm644 "$startdir/../packaging/99-ajazz-ak820pro.rules" \
+  install -Dm644 "$srcdir/$pkgname-$pkgver/packaging/99-ajazz-ak820pro.rules" \
     "$pkgdir/usr/lib/udev/rules.d/99-ajazz-ak820pro.rules"
-  install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$srcdir/$pkgname-$pkgver/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
