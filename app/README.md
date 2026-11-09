@@ -28,7 +28,7 @@ cmake --build app/build -j$(nproc)
 ```bash
 sudo install -Dm755 app/build/ak820-center /usr/local/bin/ak820-center
 sudo install -Dm644 extracted/app/layouts/rgb-keyboard.xml /usr/share/ak820-center/rgb-keyboard.xml
-sudo install -Dm644 extracted/app/skins/theme1/logo/logo.png /usr/share/ak820-center/icon.png
+sudo install -Dm644 packaging/icon.png /usr/share/ak820-center/icon.png
 sudo install -Dm644 app/packaging/ak820-center.desktop /usr/share/applications/
 # HID permissions (required):
 sudo cp app/packaging/99-ajazz-ak820pro.rules /etc/udev/rules.d/

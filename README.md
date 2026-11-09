@@ -72,6 +72,7 @@ cmake --build app/build -j$(nproc)
 ```bash
 sudo install -Dm755 app/build/ak820-center /usr/local/bin/ak820-center
 sudo install -Dm644 resources/rgb-keyboard.xml /usr/share/ak820-center/rgb-keyboard.xml
+sudo install -Dm644 packaging/icon.png /usr/share/ak820-center/icon.png
 sudo install -Dm644 packaging/ak820-center.desktop /usr/share/applications/
 ```
 
